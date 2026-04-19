@@ -21,6 +21,12 @@ export enum ProviderStatus {
   SUSPENDED = 'suspended',
 }
 
+export enum ProviderCoverageMode {
+  WILAYA_ONLY = 'wilaya_only',
+  REGIONAL = 'regional',
+  NATIONWIDE = 'nationwide',
+}
+
 @Entity('service_providers')
 export class ServiceProvider {
   @PrimaryGeneratedColumn('uuid')
@@ -49,6 +55,17 @@ export class ServiceProvider {
 
   @Column({ name: 'city', type: 'varchar', length: 100, nullable: true })
   city!: string | null;
+
+  @Column({
+    name: 'service_coverage_mode',
+    type: 'enum',
+    enum: ProviderCoverageMode,
+    default: ProviderCoverageMode.WILAYA_ONLY,
+  })
+  serviceCoverageMode!: ProviderCoverageMode;
+
+  @Column({ name: 'service_coverage_regions', type: 'simple-array', nullable: true })
+  serviceCoverageRegions!: string[] | null;
 
   @Column({ name: 'address_line', type: 'varchar', length: 255, nullable: true })
   addressLine!: string | null;

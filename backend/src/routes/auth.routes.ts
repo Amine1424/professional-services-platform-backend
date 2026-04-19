@@ -2,7 +2,12 @@ import { Request, Response, Router } from 'express';
 import { EntityManager } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { authMiddleware } from '../middleware/auth';
-import { ServiceProvider, ProviderStatus } from '../models/ServiceProvider';
+import { Category } from '../models/Category';
+import {
+  ProviderCoverageMode,
+  ServiceProvider,
+  ProviderStatus,
+} from '../models/ServiceProvider';
 import { User, UserRole } from '../models/User';
 import { HashService } from '../services/auth/hashService';
 import { JwtService } from '../services/auth/jwtService';
@@ -29,6 +34,14 @@ router.post(
         role,
         phone,
         companyName,
+        primaryCategoryId,
+        region,
+        wilaya,
+        city,
+        yearsOfExperience,
+        description,
+        serviceCoverageMode,
+        serviceCoverageRegions,
       } = req.body;
 
       const normalizedEmail = String(email).toLowerCase().trim();
@@ -47,6 +60,54 @@ router.post(
 
       const passwordHash = await HashService.hashPassword(password);
 
+      const normalizedRole =
+        role === UserRole.SERVICE_PROVIDER
+          ? UserRole.SERVICE_PROVIDER
+          : UserRole.CUSTOMER;
+
+      let providerCategory: Category | null = null;
+
+      if (normalizedRole === UserRole.SERVICE_PROVIDER) {
+        const missingFields: string[] = [];
+
+        if (!companyName || !String(companyName).trim()) missingFields.push('companyName');
+        if (!phone || !String(phone).trim()) missingFields.push('phone');
+        if (!primaryCategoryId || !String(primaryCategoryId).trim()) {
+          missingFields.push('primaryCategoryId');
+        }
+        if (!region || !String(region).trim()) missingFields.push('region');
+        if (!wilaya || !String(wilaya).trim()) missingFields.push('wilaya');
+        if (!city || !String(city).trim()) missingFields.push('city');
+        if (
+          yearsOfExperience === undefined ||
+          yearsOfExperience === null ||
+          Number.isNaN(Number(yearsOfExperience)) ||
+          Number(yearsOfExperience) < 0
+        ) {
+          missingFields.push('yearsOfExperience');
+        }
+
+        if (missingFields.length) {
+          res.status(400).json({
+            status: 'error',
+            message: `Missing required provider onboarding fields: ${missingFields.join(', ')}`,
+          });
+          return;
+        }
+
+        providerCategory = await AppDataSource.getRepository(Category).findOne({
+          where: { id: String(primaryCategoryId) },
+        });
+
+        if (!providerCategory) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Selected provider category was not found',
+          });
+          return;
+        }
+      }
+
       const result = await AppDataSource.transaction(
         async (manager: EntityManager) => {
           const userRepository = manager.getRepository(User);
@@ -58,10 +119,7 @@ router.post(
             firstName: String(firstName).trim(),
             lastName: String(lastName).trim(),
             phoneNumber: phone?.trim() || null,
-            role:
-              role === UserRole.SERVICE_PROVIDER
-                ? UserRole.SERVICE_PROVIDER
-                : UserRole.CUSTOMER,
+            role: normalizedRole,
           });
 
           await userRepository.save(user);
@@ -71,18 +129,30 @@ router.post(
               userId: user.id,
               companyName:
                 companyName?.trim() || `${user.firstName} ${user.lastName}`,
-              description: null,
-              region: null,
-              wilaya: null,
-              city: null,
+              description: String(description || '').trim() || null,
+              region: String(region || '').trim() || null,
+              wilaya: String(wilaya || '').trim() || null,
+              city: String(city || '').trim() || null,
               addressLine: null,
               avatarUrl: null,
               coverUrl: null,
-              primaryCategoryId: null,
-              yearsOfExperience: 0,
+              primaryCategoryId: providerCategory?.id || null,
+              yearsOfExperience: Number(yearsOfExperience) || 0,
+              serviceCoverageMode:
+                serviceCoverageMode === ProviderCoverageMode.REGIONAL ||
+                serviceCoverageMode === ProviderCoverageMode.NATIONWIDE
+                  ? serviceCoverageMode
+                  : ProviderCoverageMode.WILAYA_ONLY,
+              serviceCoverageRegions:
+                serviceCoverageMode === ProviderCoverageMode.REGIONAL &&
+                Array.isArray(serviceCoverageRegions)
+                  ? serviceCoverageRegions
+                      .map((item: unknown) => String(item).trim())
+                      .filter(Boolean)
+                  : null,
               averageRating: '0',
               reviewsCount: 0,
-              responseTimeMinutes: 0,
+              responseTimeMinutes: 30,
               isVerified: false,
               status: ProviderStatus.PENDING,
             });

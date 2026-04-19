@@ -3,13 +3,47 @@ import { AppDataSource } from '../config/database';
 import { authMiddleware, authorizeRole } from '../middleware/auth';
 import Category from '../models/Category';
 import ProviderMedia from '../models/ProviderMedia';
-import { ProviderStatus, ServiceProvider } from '../models/ServiceProvider';
+import {
+  ProviderCoverageMode,
+  ProviderStatus,
+  ServiceProvider,
+} from '../models/ServiceProvider';
 import { ProviderPlan, ProviderPreference } from '../models/ProviderPreference';
 import { Service, ServiceStatus } from '../models/Service';
 import { User } from '../models/User';
 import { HashService } from '../services/auth/hashService';
+import { buildProviderCoverageSummary } from '../utils/algeria';
+import {
+  createDiskUpload,
+  imageOnlyFilter,
+  removeLocalUploadByUrl,
+  toPublicUploadPath,
+} from '../utils/uploads';
 
 const router = Router();
+const providerProfileUpload = createDiskUpload(
+  (req) => ['providers', req.user?.userId || 'anonymous', 'profile'],
+  imageOnlyFilter
+);
+const cleanupProviderProfileUploads = (req: Request) => {
+  const files = req.files as
+    | {
+        avatarFile?: Express.Multer.File[];
+        coverFile?: Express.Multer.File[];
+      }
+    | undefined;
+
+  const avatarFile = files?.avatarFile?.[0];
+  const coverFile = files?.coverFile?.[0];
+
+  if (avatarFile) {
+    removeLocalUploadByUrl(toPublicUploadPath(avatarFile.path));
+  }
+
+  if (coverFile) {
+    removeLocalUploadByUrl(toPublicUploadPath(coverFile.path));
+  }
+};
 
 const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
@@ -246,6 +280,7 @@ router.get(
         !!provider.region,
         !!provider.wilaya,
         !!provider.city,
+        !!provider.serviceCoverageMode,
         !!provider.addressLine,
         !!provider.primaryCategoryId,
         provider.yearsOfExperience > 0,
@@ -264,6 +299,7 @@ router.get(
         data: {
           provider,
           preference,
+          coverage: buildProviderCoverageSummary(provider),
           planFeatures: getPlanFeatures(preference.selectedPlan),
           stats: {
             totalServices: services.length,
@@ -331,6 +367,87 @@ router.get(
   }
 );
 
+router.post(
+  '/me/media',
+  authMiddleware,
+  authorizeRole('service_provider'),
+  providerProfileUpload.fields([
+    { name: 'avatarFile', maxCount: 1 },
+    { name: 'coverFile', maxCount: 1 },
+  ]),
+  async (req: Request, res: Response) => {
+    try {
+      const providerRepository = AppDataSource.getRepository(ServiceProvider);
+      const provider = await providerRepository.findOne({
+        where: { userId: req.user!.userId },
+      });
+
+      if (!provider) {
+        cleanupProviderProfileUploads(req);
+        res.status(404).json({
+          status: 'error',
+          message: 'Provider profile not found',
+        });
+        return;
+      }
+
+      const files = req.files as
+        | {
+            avatarFile?: Express.Multer.File[];
+            coverFile?: Express.Multer.File[];
+          }
+        | undefined;
+      const avatarFile = files?.avatarFile?.[0];
+      const coverFile = files?.coverFile?.[0];
+
+      if (!avatarFile && !coverFile) {
+        cleanupProviderProfileUploads(req);
+        res.status(400).json({
+          status: 'error',
+          message: 'Select at least one image to upload',
+        });
+        return;
+      }
+
+      const previousAvatarUrl = provider.avatarUrl;
+      const previousCoverUrl = provider.coverUrl;
+
+      if (avatarFile) {
+        provider.avatarUrl = toPublicUploadPath(avatarFile.path);
+      }
+
+      if (coverFile) {
+        provider.coverUrl = toPublicUploadPath(coverFile.path);
+      }
+
+      await providerRepository.save(provider);
+
+      if (avatarFile && previousAvatarUrl && previousAvatarUrl !== provider.avatarUrl) {
+        removeLocalUploadByUrl(previousAvatarUrl);
+      }
+
+      if (coverFile && previousCoverUrl && previousCoverUrl !== provider.coverUrl) {
+        removeLocalUploadByUrl(previousCoverUrl);
+      }
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Provider media uploaded successfully',
+        data: {
+          avatarUrl: provider.avatarUrl,
+          coverUrl: provider.coverUrl,
+        },
+      });
+    } catch {
+      cleanupProviderProfileUploads(req);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to upload provider media',
+      });
+    }
+  }
+);
+
 router.put(
   '/me',
   authMiddleware,
@@ -363,6 +480,8 @@ router.put(
         responseTimeMinutes,
         avatarUrl,
         coverUrl,
+        serviceCoverageMode,
+        serviceCoverageRegions,
       } = req.body;
 
       provider.companyName =
@@ -389,6 +508,25 @@ router.put(
         responseTimeMinutes !== undefined
           ? Number(responseTimeMinutes) || 0
           : provider.responseTimeMinutes;
+
+      provider.serviceCoverageMode =
+        serviceCoverageMode !== undefined &&
+        Object.values(ProviderCoverageMode).includes(serviceCoverageMode as ProviderCoverageMode)
+          ? (serviceCoverageMode as ProviderCoverageMode)
+          : provider.serviceCoverageMode;
+
+      provider.serviceCoverageRegions =
+        serviceCoverageRegions !== undefined
+          ? Array.isArray(serviceCoverageRegions)
+            ? serviceCoverageRegions
+                .map((item: unknown) => String(item).trim())
+                .filter(Boolean)
+            : null
+          : provider.serviceCoverageRegions;
+
+      if (provider.serviceCoverageMode !== ProviderCoverageMode.REGIONAL) {
+        provider.serviceCoverageRegions = null;
+      }
 
       provider.avatarUrl =
         avatarUrl !== undefined ? String(avatarUrl).trim() || null : provider.avatarUrl;

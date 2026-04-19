@@ -52,6 +52,7 @@ export const getRoleMenuItems = (role?: AppRole | string): NavItem[] => {
         { label: 'Users', path: '/admin/users' },
         { label: 'Providers', path: '/admin/providers' },
         { label: 'Categories', path: '/admin/categories' },
+        { label: 'Review Inbox', path: '/admin/review-inbox' },
         { label: 'Regions', path: '/admin/regions' },
         { label: 'Reports', path: '/admin/reports' },
         { label: 'Content', path: '/admin/content' },
@@ -63,6 +64,7 @@ export const getRoleMenuItems = (role?: AppRole | string): NavItem[] => {
       return [
         { label: 'Overview', path: '/reviewer/dashboard' },
         { label: 'Pending Reviews', path: '/reviewer/pending' },
+        { label: 'Review Inbox', path: '/reviewer/inbox' },
         { label: 'History', path: '/reviewer/history' },
         { label: 'Profile', path: '/reviewer/profile' },
       ];

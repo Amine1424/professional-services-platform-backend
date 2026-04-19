@@ -1,112 +1,218 @@
 import { Request, Response, Router } from 'express';
+import { In, MoreThan } from 'typeorm';
 import { AppDataSource } from '../config/database';
+import { authMiddleware, authorizeRole } from '../middleware/auth';
 import Category from '../models/Category';
-import ProviderMedia from '../models/ProviderMedia';
+import FavoriteProvider from '../models/FavoriteProvider';
+import ProviderMedia, { ProviderMediaStoryAudience } from '../models/ProviderMedia';
 import ProviderPreference from '../models/ProviderPreference';
 import Service, { ServiceStatus } from '../models/Service';
 import ServiceProvider from '../models/ServiceProvider';
+import ProviderReview from '../models/ProviderReview';
+import { buildProviderCoverageSummary, providerMatchesGeoFilters } from '../utils/algeria';
+import { buildCategoryTree, collectCategoryBranchIds } from '../utils/categoryTree';
 
 const router = Router();
 
-router.get('/home', async (_req: Request, res: Response) => {
-  try {
-    const providerRepo = AppDataSource.getRepository(ServiceProvider);
-    const prefRepo = AppDataSource.getRepository(ProviderPreference);
-    const serviceRepo = AppDataSource.getRepository(Service);
-    const mediaRepo = AppDataSource.getRepository(ProviderMedia);
+const mapStoryItem = (item: ProviderMedia) => ({
+  id: item.id,
+  providerId: item.providerId,
+  providerName: item.provider?.companyName || 'Provider',
+  providerAvatarUrl: item.provider?.avatarUrl || null,
+  providerLocation: [item.provider?.city, item.provider?.wilaya, item.provider?.region]
+    .filter(Boolean)
+    .join(', '),
+  mediaType: item.mediaType,
+  mediaUrl: item.mediaUrl,
+  thumbnailUrl: item.thumbnailUrl,
+  title: item.title,
+  description: item.description,
+  likesCount: item.likesCount,
+  commentsCount: item.commentsCount,
+  promoBadgeText: item.promoBadgeText,
+  showPromoBadge: item.showPromoBadge,
+  storyAudience: item.storyAudience,
+  storyExpiresAt: item.storyExpiresAt,
+  service: item.service
+    ? {
+        id: item.service.id,
+        name: item.service.name,
+      }
+    : null,
+});
 
-    const providers = await providerRepo.find({
-      relations: ['primaryCategory', 'user'],
-      order: { createdAt: 'DESC' },
-    });
+const buildHomeBase = async () => {
+  const providerRepo = AppDataSource.getRepository(ServiceProvider);
+  const prefRepo = AppDataSource.getRepository(ProviderPreference);
+  const serviceRepo = AppDataSource.getRepository(Service);
+  const reviewRepo = AppDataSource.getRepository(ProviderReview);
 
-    const preferences = await prefRepo.find();
-    const preferenceMap = new Map(preferences.map((p) => [p.providerId, p]));
+  const providers = await providerRepo.find({
+    relations: ['primaryCategory', 'user'],
+    order: { createdAt: 'DESC' },
+  });
 
-    const services = await serviceRepo.find({
-      where: { status: ServiceStatus.PUBLISHED },
-      relations: ['category', 'provider'],
-      order: { createdAt: 'DESC' },
-    });
+  const preferences = await prefRepo.find();
+  const preferenceMap = new Map(preferences.map((p) => [p.providerId, p]));
 
-    const media = await mediaRepo.find({
-      where: { isPublished: true },
-      relations: ['service'],
-      order: { createdAt: 'DESC' },
-    });
+  const services = await serviceRepo.find({
+    where: { status: ServiceStatus.PUBLISHED },
+    relations: ['category', 'provider'],
+    order: { createdAt: 'DESC' },
+  });
 
-    const featuredProviders = providers
-      .filter((provider) => {
-        const pref = preferenceMap.get(provider.id);
-        return Boolean(pref?.featuredOnHomepage) || provider.isVerified;
-      })
-      .slice(0, 8)
-      .map((provider) => {
-        const pref = preferenceMap.get(provider.id);
-        return {
-          id: provider.id,
-          companyName: provider.companyName,
-          avatarUrl: provider.avatarUrl,
-          coverUrl: provider.coverUrl,
-          city: provider.city,
-          wilaya: provider.wilaya,
-          region: provider.region,
-          averageRating: provider.averageRating,
-          reviewsCount: provider.reviewsCount,
-          isVerified: provider.isVerified,
-          profileBadgeText: pref?.profileBadgeText || null,
-          primaryCategory: provider.primaryCategory
-            ? {
-                id: provider.primaryCategory.id,
-                name: provider.primaryCategory.name,
-              }
-            : null,
-        };
-      });
+  const reviews = await reviewRepo.find({
+    order: { createdAt: 'DESC' },
+    take: 8,
+  });
 
-    const featuredServices = services
-      .filter((service) => service.isFeatured)
-      .slice(0, 10)
-      .map((service) => ({
-        id: service.id,
-        providerId: service.providerId,
-        name: service.name,
-        description: service.description,
-        price: service.price,
-        currencyCode: service.currencyCode,
-        showPromoBadge: service.showPromoBadge,
-        promoBadgeText: service.promoBadgeText,
-        category: service.category
+  const featuredProviders = providers
+    .filter((provider) => {
+      const pref = preferenceMap.get(provider.id);
+      return Boolean(pref?.featuredOnHomepage) || provider.isVerified;
+    })
+    .slice(0, 8)
+    .map((provider) => {
+      const pref = preferenceMap.get(provider.id);
+
+      return {
+        id: provider.id,
+        companyName: provider.companyName,
+        avatarUrl: provider.avatarUrl,
+        coverUrl: provider.coverUrl,
+        city: provider.city,
+        wilaya: provider.wilaya,
+        region: provider.region,
+        averageRating: provider.averageRating,
+        reviewsCount: provider.reviewsCount,
+        isVerified: provider.isVerified,
+        profileBadgeText: pref?.profileBadgeText || null,
+        primaryCategory: provider.primaryCategory
           ? {
-              id: service.category.id,
-              name: service.category.name,
+              id: provider.primaryCategory.id,
+              name: provider.primaryCategory.name,
+              slug: provider.primaryCategory.slug,
             }
           : null,
-      }));
+      };
+    });
 
-    const stories = media.slice(0, 12).map((item) => ({
-      id: item.id,
-      providerId: item.providerId,
-      mediaType: item.mediaType,
-      mediaUrl: item.mediaUrl,
-      thumbnailUrl: item.thumbnailUrl,
-      title: item.title,
-      likesCount: item.likesCount,
-      commentsCount: item.commentsCount,
-      promoBadgeText: item.promoBadgeText,
-      showPromoBadge: item.showPromoBadge,
+  const featuredServices = services
+    .filter((service) => service.isFeatured)
+    .slice(0, 10)
+    .map((service) => ({
+      id: service.id,
+      providerId: service.providerId,
+      name: service.name,
+      description: service.description,
+      price: service.price,
+      currencyCode: service.currencyCode,
+      showPromoBadge: service.showPromoBadge,
+      promoBadgeText: service.promoBadgeText,
+      category: service.category
+        ? {
+            id: service.category.id,
+            name: service.category.name,
+            slug: service.category.slug,
+          }
+        : null,
     }));
+
+  const recentReviews = reviews
+    .map((review) => {
+      const provider = providers.find((entry) => entry.id === review.providerId);
+
+      return {
+        id: review.id,
+        providerId: review.providerId,
+        providerName: provider?.companyName || 'Provider',
+        providerAvatarUrl: provider?.avatarUrl || provider?.coverUrl || null,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt,
+      };
+    })
+    .filter((item) => Boolean(item.comment))
+    .slice(0, 6);
+
+  return {
+    featuredProviders,
+    featuredServices,
+    recentReviews,
+  };
+};
+
+const getPublicStories = async () => {
+  const mediaRepo = AppDataSource.getRepository(ProviderMedia);
+
+  return await mediaRepo.find({
+    where: {
+      isPublished: true,
+      isStory: true,
+      storyAudience: ProviderMediaStoryAudience.PUBLIC,
+      storyExpiresAt: MoreThan(new Date()),
+    },
+    relations: ['service', 'provider'],
+    order: { createdAt: 'DESC' },
+    take: 12,
+  });
+};
+
+const getCustomerStories = async (favoriteProviderIds: string[]) => {
+  const mediaRepo = AppDataSource.getRepository(ProviderMedia);
+
+  const publicStories = await mediaRepo.find({
+    where: {
+      isPublished: true,
+      isStory: true,
+      storyAudience: ProviderMediaStoryAudience.PUBLIC,
+      storyExpiresAt: MoreThan(new Date()),
+    },
+    relations: ['service', 'provider'],
+    order: { createdAt: 'DESC' },
+    take: 24,
+  });
+
+  if (!favoriteProviderIds.length) {
+    return publicStories.slice(0, 12);
+  }
+
+  const favoriteStories = await mediaRepo.find({
+    where: {
+      isPublished: true,
+      isStory: true,
+      storyAudience: ProviderMediaStoryAudience.FAVORITES_ONLY,
+      providerId: In(favoriteProviderIds),
+      storyExpiresAt: MoreThan(new Date()),
+    },
+    relations: ['service', 'provider'],
+    order: { createdAt: 'DESC' },
+    take: 24,
+  });
+
+  return [...publicStories, ...favoriteStories]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .filter(
+      (item, index, array) => array.findIndex((entry) => entry.id === item.id) === index
+    )
+    .slice(0, 12);
+};
+
+router.get('/home', async (_req: Request, res: Response) => {
+  try {
+    const base = await buildHomeBase();
+    const stories = await getPublicStories();
 
     res.status(200).json({
       status: 'success',
       message: 'Home discovery feed fetched successfully',
       data: {
-        featuredProviders,
-        featuredServices,
-        stories,
+        ...base,
+        stories: stories.map(mapStoryItem),
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch discovery home feed', error);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch discovery home feed',
@@ -114,9 +220,43 @@ router.get('/home', async (_req: Request, res: Response) => {
   }
 });
 
+router.get(
+  '/customer-home',
+  authMiddleware,
+  authorizeRole('customer'),
+  async (req: Request, res: Response) => {
+    try {
+      const favoriteProviderIds = (
+        await AppDataSource.getRepository(FavoriteProvider).find({
+          where: { userId: req.user!.userId },
+        })
+      ).map((item) => item.providerId);
+
+      const base = await buildHomeBase();
+      const stories = await getCustomerStories(favoriteProviderIds);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Customer home feed fetched successfully',
+        data: {
+          ...base,
+          stories: stories.map(mapStoryItem),
+        },
+      });
+    } catch (error) {
+      console.error('Failed to fetch customer home feed', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch customer home feed',
+      });
+    }
+  }
+);
+
 router.get('/search', async (req: Request, res: Response) => {
   try {
     const query = String(req.query.query || '').trim().toLowerCase();
+    const location = String(req.query.location || '').trim().toLowerCase();
     const region = String(req.query.region || '').trim().toLowerCase();
     const wilaya = String(req.query.wilaya || '').trim().toLowerCase();
     const categoryId = String(req.query.categoryId || '').trim();
@@ -124,6 +264,7 @@ router.get('/search', async (req: Request, res: Response) => {
     const providerRepo = AppDataSource.getRepository(ServiceProvider);
     const prefRepo = AppDataSource.getRepository(ProviderPreference);
     const serviceRepo = AppDataSource.getRepository(Service);
+    const categoryRepo = AppDataSource.getRepository(Category);
 
     const providers = await providerRepo.find({
       relations: ['primaryCategory', 'user'],
@@ -139,6 +280,23 @@ router.get('/search', async (req: Request, res: Response) => {
       order: { createdAt: 'DESC' },
     });
 
+    const categories = categoryId
+      ? await categoryRepo.find({
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            description: true,
+            iconUrl: true,
+            parentId: true,
+          },
+        })
+      : [];
+
+    const allowedCategoryIds = categoryId
+      ? new Set(collectCategoryBranchIds(categories, categoryId))
+      : null;
+
     const servicesByProvider = new Map<string, Service[]>();
     services.forEach((service) => {
       if (!servicesByProvider.has(service.providerId)) {
@@ -150,19 +308,23 @@ router.get('/search', async (req: Request, res: Response) => {
     const filtered = providers.filter((provider) => {
       const providerServices = servicesByProvider.get(provider.id) || [];
 
-      if (providerServices.length === 0) return false;
+      if (providerServices.length === 0) {
+        return false;
+      }
 
-      const matchesRegion = region
-        ? `${provider.region || ''}`.toLowerCase().includes(region)
-        : true;
+      const matchesGeo = providerMatchesGeoFilters(provider, {
+        location,
+        region,
+        wilaya,
+      });
 
-      const matchesWilaya = wilaya
-        ? `${provider.wilaya || ''}`.toLowerCase().includes(wilaya)
-        : true;
-
-      const matchesCategory = categoryId
-        ? provider.primaryCategoryId === categoryId ||
-          providerServices.some((service) => service.categoryId === categoryId)
+      const matchesCategory = allowedCategoryIds
+        ? (provider.primaryCategoryId
+            ? allowedCategoryIds.has(provider.primaryCategoryId)
+            : false) ||
+          providerServices.some(
+            (service) => service.categoryId && allowedCategoryIds.has(service.categoryId)
+          )
         : true;
 
       const searchable = [
@@ -181,7 +343,7 @@ router.get('/search', async (req: Request, res: Response) => {
 
       const matchesQuery = query ? searchable.includes(query) : true;
 
-      return matchesRegion && matchesWilaya && matchesCategory && matchesQuery;
+      return matchesGeo && matchesCategory && matchesQuery;
     });
 
     res.status(200).json({
@@ -190,6 +352,7 @@ router.get('/search', async (req: Request, res: Response) => {
       data: filtered.map((provider) => {
         const pref = preferenceMap.get(provider.id);
         const providerServices = servicesByProvider.get(provider.id) || [];
+
         return {
           id: provider.id,
           companyName: provider.companyName,
@@ -203,12 +366,14 @@ router.get('/search', async (req: Request, res: Response) => {
           isVerified: provider.isVerified,
           yearsOfExperience: provider.yearsOfExperience,
           responseTimeMinutes: provider.responseTimeMinutes,
+          serviceCoverage: buildProviderCoverageSummary(provider),
           profileBadgeText: pref?.profileBadgeText || null,
           featuredOnHomepage: pref?.featuredOnHomepage || false,
           primaryCategory: provider.primaryCategory
             ? {
                 id: provider.primaryCategory.id,
                 name: provider.primaryCategory.name,
+                slug: provider.primaryCategory.slug,
               }
             : null,
           servicesPreview: providerServices.slice(0, 3).map((service) => ({
@@ -222,7 +387,8 @@ router.get('/search', async (req: Request, res: Response) => {
         };
       }),
     });
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch search results', error);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch search results',
@@ -233,15 +399,23 @@ router.get('/search', async (req: Request, res: Response) => {
 router.get('/categories', async (_req: Request, res: Response) => {
   try {
     const categories = await AppDataSource.getRepository(Category).find({
-      order: { createdAt: 'DESC' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        iconUrl: true,
+        parentId: true,
+      },
     });
 
     res.status(200).json({
       status: 'success',
       message: 'Discovery categories fetched successfully',
-      data: categories,
+      data: buildCategoryTree(categories),
     });
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch discovery categories', error);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch discovery categories',

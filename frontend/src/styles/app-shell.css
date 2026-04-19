@@ -1,8 +1,63 @@
 .psp-app-shell {
+  --psp-shell-accent: #2563eb;
+  --psp-shell-accent-strong: #1d4ed8;
+  --psp-shell-accent-soft: rgba(37, 99, 235, 0.14);
+  --psp-shell-brand-start: #2563eb;
+  --psp-shell-brand-end: #4f46e5;
+  --psp-shell-bg-start: #f7faff;
+  --psp-shell-bg-mid: #e4edf9;
+  --psp-shell-bg-end: #d7e2f2;
+  --psp-shell-surface: rgba(255, 255, 255, 0.82);
+  --psp-shell-surface-strong: rgba(255, 255, 255, 0.88);
+  --psp-shell-muted: #64748b;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, #f7faff 0%, #e4edf9 42%, #d7e2f2 100%);
+    radial-gradient(circle at top, var(--psp-shell-bg-start) 0%, var(--psp-shell-bg-mid) 42%, var(--psp-shell-bg-end) 100%);
   color: #0f172a;
+}
+
+.psp-app-shell--customer {
+  --psp-shell-accent: #2563eb;
+  --psp-shell-accent-strong: #1d4ed8;
+  --psp-shell-accent-soft: rgba(37, 99, 235, 0.14);
+  --psp-shell-brand-start: #2563eb;
+  --psp-shell-brand-end: #4f46e5;
+  --psp-shell-bg-start: #f7faff;
+  --psp-shell-bg-mid: #e4edf9;
+  --psp-shell-bg-end: #d7e2f2;
+}
+
+.psp-app-shell--service-provider {
+  --psp-shell-accent: #0f766e;
+  --psp-shell-accent-strong: #0f766e;
+  --psp-shell-accent-soft: rgba(15, 118, 110, 0.14);
+  --psp-shell-brand-start: #0f766e;
+  --psp-shell-brand-end: #0ea5a4;
+  --psp-shell-bg-start: #f1fbfa;
+  --psp-shell-bg-mid: #dff4f0;
+  --psp-shell-bg-end: #d4ebe7;
+}
+
+.psp-app-shell--reviewer {
+  --psp-shell-accent: #7c3aed;
+  --psp-shell-accent-strong: #6d28d9;
+  --psp-shell-accent-soft: rgba(124, 58, 237, 0.14);
+  --psp-shell-brand-start: #7c3aed;
+  --psp-shell-brand-end: #f59e0b;
+  --psp-shell-bg-start: #faf7ff;
+  --psp-shell-bg-mid: #efe8ff;
+  --psp-shell-bg-end: #e7def8;
+}
+
+.psp-app-shell--admin {
+  --psp-shell-accent: #0f172a;
+  --psp-shell-accent-strong: #111827;
+  --psp-shell-accent-soft: rgba(15, 23, 42, 0.08);
+  --psp-shell-brand-start: #0f172a;
+  --psp-shell-brand-end: #475569;
+  --psp-shell-bg-start: #f6f8fb;
+  --psp-shell-bg-mid: #eef2f7;
+  --psp-shell-bg-end: #e4eaf2;
 }
 
 .psp-app-shell__layout {
@@ -20,6 +75,7 @@
   backdrop-filter: blur(18px);
   border-right: 1px solid rgba(148, 163, 184, 0.18);
   box-shadow: 18px 0 50px rgba(15, 23, 42, 0.04);
+  overflow-y: auto;
 }
 
 .psp-app-shell__brand {
@@ -35,11 +91,11 @@
   width: 48px;
   place-items: center;
   border-radius: 18px;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: linear-gradient(135deg, var(--psp-shell-brand-start), var(--psp-shell-brand-end));
   color: #fff;
   font-size: 18px;
   font-weight: 800;
-  box-shadow: 0 18px 35px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.16);
 }
 
 .psp-app-shell__brand-copy strong {
@@ -52,7 +108,7 @@
 .psp-app-shell__brand-copy span {
   display: block;
   margin-top: 4px;
-  color: #64748b;
+  color: var(--psp-shell-muted);
   font-size: 13px;
 }
 
@@ -68,7 +124,7 @@
 .psp-app-shell__user-label {
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--psp-shell-muted);
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -84,7 +140,37 @@
   display: block;
   margin-top: 4px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--psp-shell-muted);
+}
+
+.psp-app-shell__user-meta {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.psp-app-shell__role-chip,
+.psp-app-shell__date-chip,
+.psp-app-shell__heading-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.psp-app-shell__role-chip,
+.psp-app-shell__heading-pill {
+  background: var(--psp-shell-accent-soft);
+  color: var(--psp-shell-accent-strong);
+}
+
+.psp-app-shell__date-chip {
+  background: rgba(15, 23, 42, 0.08);
+  color: #334155;
 }
 
 .psp-app-shell__nav {
@@ -112,10 +198,49 @@
 }
 
 .psp-app-shell__nav-link--active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(79, 70, 229, 0.14));
-  border-color: rgba(37, 99, 235, 0.16);
-  color: #1d4ed8;
-  box-shadow: 0 16px 35px rgba(37, 99, 235, 0.1);
+  background: linear-gradient(135deg, var(--psp-shell-accent-soft), rgba(255, 255, 255, 0.66));
+  border-color: rgba(148, 163, 184, 0.16);
+  color: var(--psp-shell-accent-strong);
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
+}
+
+.psp-app-shell__spotlight {
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.78));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
+}
+
+.psp-app-shell__spotlight-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--psp-shell-accent-strong);
+}
+
+.psp-app-shell__spotlight-copy {
+  margin: 10px 0 0;
+  color: #334155;
+  line-height: 1.75;
+  font-size: 13px;
+}
+
+.psp-app-shell__spotlight-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.psp-app-shell__spotlight-item {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--psp-shell-accent-soft);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .psp-app-shell__sidebar-footer {
@@ -168,7 +293,7 @@
   flex: 1;
   padding: 24px 26px;
   border-radius: 30px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--psp-shell-surface);
   border: 1px solid rgba(148, 163, 184, 0.14);
   box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(16px);
@@ -176,11 +301,18 @@
 
 .psp-app-shell__eyebrow {
   margin-bottom: 8px;
-  color: #2563eb;
+  color: var(--psp-shell-accent-strong);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+}
+
+.psp-app-shell__heading-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .psp-app-shell__heading-card h1 {
@@ -192,7 +324,7 @@
 
 .psp-app-shell__heading-card p {
   margin: 10px 0 0;
-  color: #64748b;
+  color: var(--psp-shell-muted);
   line-height: 1.8;
 }
 
@@ -207,20 +339,65 @@
   border-radius: 16px;
   text-decoration: none;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--psp-shell-surface-strong);
   color: #334155;
   border: 1px solid rgba(148, 163, 184, 0.14);
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
 }
 
 .psp-app-shell__quick-link:hover {
-  color: #0f172a;
+  color: var(--psp-shell-accent-strong);
   background: #fff;
 }
 
 .psp-app-shell__content {
   display: grid;
   gap: 20px;
+}
+
+.psp-app-shell--admin {
+  background:
+    linear-gradient(180deg, rgba(246, 248, 251, 0.98), rgba(228, 234, 242, 0.98)),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: auto, 24px 24px, 24px 24px;
+}
+
+.psp-app-shell--admin .psp-app-shell__sidebar,
+.psp-app-shell--admin .psp-app-shell__heading-card,
+.psp-app-shell--admin .psp-app-shell__quick-link,
+.psp-app-shell--admin .psp-app-shell__spotlight,
+.psp-app-shell--admin .psp-app-shell__user {
+  border-radius: 18px;
+}
+
+.psp-app-shell--admin .psp-app-shell__sidebar {
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 12px 0 34px rgba(15, 23, 42, 0.04);
+}
+
+.psp-app-shell--admin .psp-app-shell__nav-link {
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.psp-app-shell--admin .psp-app-shell__nav-link--active {
+  background: rgba(15, 23, 42, 0.08);
+  box-shadow: none;
+}
+
+.psp-app-shell--admin .psp-app-shell__spotlight {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.96));
+}
+
+.psp-app-shell--admin .psp-app-shell__quick-link {
+  background: rgba(248, 250, 252, 0.94);
+  box-shadow: none;
+}
+
+.psp-app-shell--admin .psp-app-shell__heading-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.06);
 }
 
 @media (max-width: 1100px) {

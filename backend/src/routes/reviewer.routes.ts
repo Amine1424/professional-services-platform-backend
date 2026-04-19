@@ -12,6 +12,7 @@ import ServiceProvider, { ProviderStatus } from '../models/ServiceProvider';
 import ServiceRequest from '../models/ServiceRequest';
 import User from '../models/User';
 import { createNotification } from '../services/notificationService';
+import { saveModerationDecision } from '../services/moderationService';
 
 const router = Router();
 
@@ -27,20 +28,6 @@ const endOfToday = () => {
   const date = new Date();
   date.setHours(23, 59, 59, 999);
   return date;
-};
-
-const getProviderStatusFromDecision = (decision: ModerationDecision): ProviderStatus => {
-  switch (decision) {
-    case ModerationDecision.APPROVED:
-      return ProviderStatus.APPROVED;
-    case ModerationDecision.REJECTED:
-      return ProviderStatus.REJECTED;
-    case ModerationDecision.SUSPENDED:
-      return ProviderStatus.SUSPENDED;
-    case ModerationDecision.REQUEST_INFO:
-    default:
-      return ProviderStatus.PENDING;
-  }
 };
 
 const buildDashboardSummary = async () => {
@@ -124,63 +111,6 @@ const buildDashboardSummary = async () => {
       approvalRate,
     },
   };
-};
-
-const saveModerationDecision = async ({
-  providerId,
-  reviewerUserId,
-  decision,
-  note,
-  checklistJson,
-}: {
-  providerId: string;
-  reviewerUserId: string;
-  decision: ModerationDecision;
-  note?: string | null;
-  checklistJson?: Record<string, boolean> | null;
-}) => {
-  const providerRepository = AppDataSource.getRepository(ServiceProvider);
-  const moderationRepository = AppDataSource.getRepository(ProviderModerationReview);
-
-  const provider = await providerRepository.findOne({
-    where: { id: providerId },
-    relations: ['user', 'primaryCategory'],
-  });
-
-  if (!provider) {
-    return null;
-  }
-
-  provider.status = getProviderStatusFromDecision(decision);
-  provider.isVerified = decision === ModerationDecision.APPROVED;
-  await providerRepository.save(provider);
-
-  const moderationReview = moderationRepository.create({
-    providerId,
-    reviewerUserId,
-    decision,
-    note: note || null,
-    checklistJson: checklistJson || null,
-  });
-
-  await moderationRepository.save(moderationReview);
-
-  await createNotification({
-    recipientUserId: provider.userId,
-    actorUserId: reviewerUserId,
-    type: NotificationType.SYSTEM,
-    title: 'Provider review updated',
-    body: `Your account review status is now ${provider.status}.`,
-    link: '/provider/dashboard',
-    metadataJson: {
-      providerId: provider.id,
-      decision,
-      status: provider.status,
-      isVerified: provider.isVerified,
-    },
-  });
-
-  return provider;
 };
 
 router.get(

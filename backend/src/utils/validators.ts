@@ -38,6 +38,62 @@ export const validateRegister = () => [
     .isIn(['customer', 'service_provider'])
     .withMessage('Invalid role'),
 
+  body('phone')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ min: 8, max: 30 })
+    .withMessage('Phone number must be between 8 and 30 characters'),
+
+  body('companyName')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ min: 2, max: 180 })
+    .withMessage('Company name must be between 2 and 180 characters'),
+
+  body('primaryCategoryId')
+    .optional({ values: 'falsy' })
+    .isUUID()
+    .withMessage('Primary category must be a valid id'),
+
+  body('region')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Region must be between 2 and 100 characters'),
+
+  body('wilaya')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Wilaya must be between 2 and 100 characters'),
+
+  body('city')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('City must be between 2 and 100 characters'),
+
+  body('yearsOfExperience')
+    .optional({ values: 'falsy' })
+    .isInt({ min: 0, max: 80 })
+    .withMessage('Years of experience must be between 0 and 80'),
+
+  body('description')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ max: 2500 })
+    .withMessage('Description must be 2500 characters or less'),
+
+  body('serviceCoverageMode')
+    .optional({ values: 'falsy' })
+    .isIn(['wilaya_only', 'regional', 'nationwide'])
+    .withMessage('Service coverage mode is invalid'),
+
+  body('serviceCoverageRegions')
+    .optional()
+    .isArray()
+    .withMessage('Service coverage regions must be an array'),
+
   body('acceptTerms')
     .custom((value) => value === true || value === 'true')
     .withMessage('You must accept the terms and conditions'),

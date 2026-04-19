@@ -1,262 +1,402 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import PublicMarketplaceLayout from '../components/PublicMarketplaceLayout';
+import StoryViewer from '../components/stories/StoryViewer';
 import api from '../config/api';
+import ProviderHero from '../components/public-provider/ProviderHero';
+import ProviderMediaSection from '../components/public-provider/ProviderMediaSection';
+import ProviderProfileDetails from '../components/public-provider/ProviderProfileDetails';
+import ProviderQuickNav from '../components/public-provider/ProviderQuickNav';
+import ProviderRequestPanel from '../components/public-provider/ProviderRequestPanel';
+import ProviderReviewsSection from '../components/public-provider/ProviderReviewsSection';
+import ProviderServicesSection from '../components/public-provider/ProviderServicesSection';
+import ProviderStoriesSection from '../components/public-provider/ProviderStoriesSection';
+import {
+  MediaComment,
+  PublicProviderPayload,
+  ReviewItem,
+} from '../components/public-provider/types';
+import { getStoredUser } from '../lib/role-routing';
+import '../styles/app-primitives.css';
 
-interface ReviewItem {
-  id: string;
-  providerId: string;
-  rating: number;
-  comment?: string | null;
-  createdAt: string;
-  authorName: string;
+interface ProviderRequestForm {
+  serviceId: string;
+  subject: string;
+  description: string;
+  budgetMin: string;
+  budgetMax: string;
+  currencyCode: string;
+  preferredDate: string;
+  initialMessage: string;
 }
 
-interface MediaComment {
-  id: string;
-  authorName: string;
-  body: string;
-  createdAt: string;
-}
+const emptyReviewForm = {
+  rating: 5,
+  comment: '',
+};
 
-interface PublicProviderPayload {
-  provider: {
-    id: string;
-    companyName: string;
-    description?: string | null;
-    avatarUrl?: string | null;
-    coverUrl?: string | null;
-    region?: string | null;
-    wilaya?: string | null;
-    city?: string | null;
-    addressLine?: string | null;
-    yearsOfExperience: number;
-    averageRating: string;
-    reviewsCount: number;
-    responseTimeMinutes: number;
-    isVerified: boolean;
-    status: string;
-    primaryCategory?: {
-      id: string;
-      name: string;
-      slug: string;
-    } | null;
-    owner: {
-      firstName: string;
-      lastName: string;
-    };
-    contact: {
-      email?: string | null;
-      phoneNumber?: string | null;
-      addressLine?: string | null;
-    };
-    preference: {
-      selectedPlan: 'basic' | 'pro' | 'business';
-      featuredOnHomepage: boolean;
-      profileBadgeText?: string | null;
-    };
-  };
-  services: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    description: string;
-    price?: string | null;
-    currencyCode: string;
-    deliveryMode: string;
-    responseTimeHours: number;
-    isFeatured: boolean;
-    showPromoBadge: boolean;
-    promoBadgeText?: string | null;
-    category?: {
-      id: string;
-      name: string;
-      slug: string;
-    } | null;
-  }>;
-  media: Array<{
-    id: string;
-    mediaType: 'image' | 'video';
-    mediaUrl: string;
-    thumbnailUrl?: string | null;
-    title: string;
-    description?: string | null;
-    isFeatured: boolean;
-    showPromoBadge: boolean;
-    promoBadgeText?: string | null;
-    likesCount: number;
-    commentsCount: number;
-    service?: {
-      id: string;
-      name: string;
-    } | null;
-    latestComments: Array<{
-      id: string;
-      authorName: string;
-      body: string;
-      createdAt: string;
-    }>;
-  }>;
-}
+const emptyRequestForm: ProviderRequestForm = {
+  serviceId: '',
+  subject: '',
+  description: '',
+  budgetMin: '',
+  budgetMax: '',
+  currencyCode: 'DZD',
+  preferredDate: '',
+  initialMessage: '',
+};
 
-export const PublicProviderPage: React.FC = () => {
+const PublicProviderPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentUser = useMemo(() => getStoredUser(), []);
+  const token = localStorage.getItem('accessToken');
+  const intent = searchParams.get('intent');
+  const storyIdParam = searchParams.get('storyId');
 
   const [data, setData] = useState<PublicProviderPayload | null>(null);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
-
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [submittingRequest, setSubmittingRequest] = useState(false);
   const [commentsMap, setCommentsMap] = useState<Record<string, MediaComment[]>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
   const [actionMediaId, setActionMediaId] = useState<string | null>(null);
+  const [reviewForm, setReviewForm] = useState(emptyReviewForm);
+  const [hasExistingReview, setHasExistingReview] = useState(false);
+  const [requestForm, setRequestForm] = useState<ProviderRequestForm>(emptyRequestForm);
+  const [customerGeo, setCustomerGeo] = useState<{
+    preferredRegion?: string | null;
+    preferredWilaya?: string | null;
+  }>({});
+  const [storyReplyDraft, setStoryReplyDraft] = useState('');
+  const [replyingToStory, setReplyingToStory] = useState(false);
+  const likedMapRef = useRef<Record<string, boolean>>({});
+  const commentDraftsRef = useRef<Record<string, string>>({});
 
-  const [reviewForm, setReviewForm] = useState({
-    rating: 5,
-    comment: '',
-  });
+  const buildProviderUrl = useCallback(
+    (overrides?: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
 
-  const [showRequestForm, setShowRequestForm] = useState(false);
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-  const [requestForm, setRequestForm] = useState({
-    serviceId: '',
-    subject: '',
-    description: '',
-    budgetMin: '',
-    budgetMax: '',
-    currencyCode: 'DZD',
-    preferredDate: '',
-    initialMessage: '',
-  });
+      Object.entries(overrides || {}).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === '') {
+          next.delete(key);
+          return;
+        }
 
-  const currentUser = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('user');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }, []);
+        next.set(key, value);
+      });
 
-  const token = localStorage.getItem('accessToken');
+      const query = next.toString();
+      return `/providers/${id}${query ? `?${query}` : ''}`;
+    },
+    [id, searchParams]
+  );
 
-  const loadPage = async () => {
-    try {
-      const [providerRes, reviewsRes] = await Promise.all([
-        api.get(`/public-providers/${id}`),
-        api.get(`/provider-reviews/provider/${id}`),
-      ]);
+  const loadPage = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = Boolean(options?.silent);
 
-      const payload = providerRes.data?.data || null;
-      setData(payload);
-      setReviews(reviewsRes.data?.data || []);
+      try {
+        if (!silent) {
+          setLoading(true);
+          setError(null);
+        }
 
-      if (payload?.media?.length) {
-        const initialComments: Record<string, MediaComment[]> = {};
-        payload.media.forEach((item: any) => {
-          initialComments[item.id] = item.latestComments || [];
-        });
-        setCommentsMap(initialComments);
+        const [providerRes, reviewsRes] = await Promise.all([
+          api.get(`/public-providers/${id}`),
+          api.get(`/provider-reviews/provider/${id}`),
+        ]);
+
+        const payload = providerRes.data?.data || null;
+        setData(payload);
+        setReviews(reviewsRes.data?.data || []);
+
+        if (payload?.media?.length) {
+          const nextComments: Record<string, MediaComment[]> = {};
+          payload.media.forEach((item: PublicProviderPayload['media'][number]) => {
+            nextComments[item.id] = item.latestComments || [];
+          });
+          setCommentsMap(nextComments);
+        } else {
+          setCommentsMap({});
+        }
+      } catch (requestError: any) {
+        if (silent) {
+          toast.error(requestError.response?.data?.message || 'Failed to refresh provider data.');
+          return;
+        }
+
+        setData(null);
+        setReviews([]);
+        setError(requestError.response?.data?.message || 'Failed to load the provider page.');
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error(error);
-      setData(null);
-      setReviews([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [id]
+  );
 
-  const loadFavoritesState = async () => {
-    if (!token) return;
+  const loadFavoritesState = useCallback(async () => {
+    if (!token) {
+      setIsFavorite(false);
+      return;
+    }
 
     try {
       const response = await api.get('/favorites/providers');
       const items = response.data?.data || [];
-      setIsFavorite(items.some((item: any) => item.id === id));
-    } catch (error) {
-      console.error(error);
+      setIsFavorite(items.some((item: { id: string }) => item.id === id));
+    } catch {
+      setIsFavorite(false);
     }
-  };
+  }, [id, token]);
+
+  const loadViewerState = useCallback(async () => {
+    if (!token || !id || currentUser?.role !== 'customer') {
+      setLikedMap({});
+      setReviewForm(emptyReviewForm);
+      setHasExistingReview(false);
+      setCustomerGeo({});
+      return;
+    }
+
+    try {
+      const [interactionsRes, customerReviewsRes, customerPreferencesRes] = await Promise.all([
+        api.get(`/provider-media/provider/${id}/interactions`),
+        api.get('/provider-reviews/me'),
+        api.get('/customers/me/preferences'),
+      ]);
+
+      const likedMediaIds: string[] = interactionsRes.data?.data?.likedMediaIds || [];
+      setLikedMap(
+        likedMediaIds.reduce<Record<string, boolean>>((acc, mediaId) => {
+          acc[mediaId] = true;
+          return acc;
+        }, {})
+      );
+
+      const myReviews = customerReviewsRes.data?.data || [];
+      const existingReview = myReviews.find(
+        (item: { providerId?: string }) => item.providerId === id
+      );
+      const preferences = customerPreferencesRes.data?.data || {};
+      setCustomerGeo({
+        preferredRegion: preferences.preferredRegion || null,
+        preferredWilaya: preferences.preferredWilaya || null,
+      });
+
+      if (existingReview) {
+        setHasExistingReview(true);
+        setReviewForm({
+          rating: Number(existingReview.rating) || 5,
+          comment: existingReview.comment || '',
+        });
+      } else {
+        setHasExistingReview(false);
+        setReviewForm(emptyReviewForm);
+      }
+    } catch {
+      setLikedMap({});
+      setHasExistingReview(false);
+      setCustomerGeo({});
+    }
+  }, [currentUser?.role, id, token]);
+
+  const updateMediaItem = useCallback(
+    (
+      mediaId: string,
+      updater: (item: PublicProviderPayload['media'][number]) => PublicProviderPayload['media'][number]
+    ) => {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              media: current.media.map((item) =>
+                item.id === mediaId ? updater(item) : item
+              ),
+            }
+          : current
+      );
+    },
+    []
+  );
 
   useEffect(() => {
-    if (id) {
-      loadPage();
-      loadFavoritesState();
-    }
-  }, [id]);
+    if (!id) return;
 
-  const requireCustomer = () => {
-    if (!token) {
-      navigate('/login');
-      return false;
+    void loadPage();
+    void loadFavoritesState();
+    void loadViewerState();
+  }, [id, loadFavoritesState, loadPage, loadViewerState]);
+
+  useEffect(() => {
+    likedMapRef.current = likedMap;
+  }, [likedMap]);
+
+  useEffect(() => {
+    commentDraftsRef.current = commentDrafts;
+  }, [commentDrafts]);
+
+  useEffect(() => {
+    if (!storyIdParam || !data?.stories?.length) {
+      return;
     }
 
-    if (currentUser?.role !== 'customer') {
-      toast.error('هذه العملية متاحة للزبون فقط');
-      return false;
+    if (!data.stories.some((story) => story.id === storyIdParam)) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('storyId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [data?.stories, searchParams, setSearchParams, storyIdParam]);
+
+  useEffect(() => {
+    if (!id || !intent || !token || currentUser?.role !== 'customer') return;
+
+    const clearIntent = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('intent');
+      setSearchParams(next, { replace: true });
+    };
+
+    if (intent === 'message') {
+      clearIntent();
+      navigate(`/customer/messages?providerId=${id}`, { replace: true });
+      return;
     }
 
-    return true;
-  };
+    if (intent === 'request') {
+      setShowRequestForm(true);
+      clearIntent();
+      return;
+    }
+
+    if (intent === 'favorite') {
+      if (!isFavorite) {
+        void api
+          .post(`/favorites/providers/${id}`)
+          .then(() => {
+            setIsFavorite(true);
+            toast.success('Provider added to favorites.');
+            void loadPage({ silent: true });
+          })
+          .catch((requestError: any) => {
+            toast.error(requestError.response?.data?.message || 'Failed to update favorites.');
+          })
+          .finally(() => clearIntent());
+      } else {
+        clearIntent();
+      }
+    }
+  }, [currentUser?.role, id, intent, isFavorite, loadPage, navigate, searchParams, setSearchParams, token]);
+
+  const requireCustomerForPath = useCallback(
+    (redirectPath: string) => {
+      if (!token) {
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+        return false;
+      }
+
+      if (currentUser?.role !== 'customer') {
+        toast.error('This action is available for customer accounts only.');
+        return false;
+      }
+
+      return true;
+    },
+    [currentUser?.role, navigate, token]
+  );
+
+  const requireCustomer = useCallback(
+    (requestedIntent: 'message' | 'request' | 'favorite' | 'review') =>
+      requireCustomerForPath(buildProviderUrl({ intent: requestedIntent })),
+    [buildProviderUrl, requireCustomerForPath]
+  );
+
+  const setStoryContext = useCallback(
+    (storyId: string | null) => {
+      const next = new URLSearchParams(searchParams);
+
+      if (storyId) {
+        next.set('storyId', storyId);
+      } else {
+        next.delete('storyId');
+      }
+
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
 
   const handleContact = () => {
-    if (!requireCustomer()) return;
+    if (!requireCustomer('message')) return;
     navigate(`/customer/messages?providerId=${id}`);
   };
 
-  const handleRequest = () => {
-    if (!requireCustomer()) return;
+  const handleRequest = (serviceId = '', subject = '') => {
+    if (!requireCustomer('request')) return;
+
+    setRequestForm((current) => ({
+      ...current,
+      serviceId,
+      subject,
+    }));
     setShowRequestForm(true);
   };
 
+  const handleExploreCategory = (categorySlug: string) => {
+    navigate(`/explore?category=${encodeURIComponent(categorySlug)}`);
+  };
+
   const toggleFavorite = async () => {
-    if (!requireCustomer()) return;
+    if (!requireCustomer('favorite')) return;
 
     try {
       if (isFavorite) {
         await api.delete(`/favorites/providers/${id}`);
         setIsFavorite(false);
-        toast.success('تمت إزالة المزود من المفضلة');
+        toast.success('Provider removed from favorites.');
       } else {
         await api.post(`/favorites/providers/${id}`);
         setIsFavorite(true);
-        toast.success('تمت إضافة المزود إلى المفضلة');
+        toast.success('Provider added to favorites.');
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشلت العملية');
+
+      await loadPage({ silent: true });
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to update favorites.');
     }
   };
 
   const submitReview = async () => {
-    if (!requireCustomer()) return;
+    if (!requireCustomer('review')) return;
 
     try {
       await api.post(`/provider-reviews/provider/${id}`, reviewForm);
-      toast.success('تم حفظ التقييم');
-      loadPage();
-      setReviewForm({
-        rating: 5,
-        comment: '',
-      });
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل حفظ التقييم');
+      toast.success('Review submitted.');
+      await Promise.all([loadPage({ silent: true }), loadViewerState()]);
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to submit the review.');
     }
   };
 
   const submitRequest = async () => {
-    if (!requireCustomer()) return;
+    if (!requireCustomer('request')) return;
 
     if (!requestForm.description.trim()) {
-      toast.error('وصف الطلب مطلوب');
+      toast.error('Request description is required.');
       return;
     }
 
     try {
       setSubmittingRequest(true);
-
       const response = await api.post('/orders', {
         providerId: id,
         serviceId: requestForm.serviceId || null,
@@ -269,727 +409,372 @@ export const PublicProviderPage: React.FC = () => {
         initialMessage: requestForm.initialMessage || requestForm.description,
       });
 
-      toast.success('تم إرسال طلب الخدمة بنجاح');
+      toast.success('Service request sent.');
       setShowRequestForm(false);
-      setRequestForm({
-        serviceId: '',
-        subject: '',
-        description: '',
-        budgetMin: '',
-        budgetMax: '',
-        currencyCode: 'DZD',
-        preferredDate: '',
-        initialMessage: '',
-      });
+      setRequestForm(emptyRequestForm);
       navigate(
         response.data?.data?.id
           ? `/customer/orders?requestId=${response.data.data.id}`
           : '/customer/orders'
       );
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل إرسال طلب الخدمة');
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to submit the request.');
     } finally {
       setSubmittingRequest(false);
     }
   };
 
-  const refreshMediaComments = async (mediaId: string) => {
+  const refreshMediaComments = useCallback(async (mediaId: string) => {
     try {
       const response = await api.get(`/provider-media/${mediaId}/comments`);
-      setCommentsMap((prev) => ({
-        ...prev,
-        [mediaId]: response.data?.data || [],
-      }));
-    } catch (error) {
-      console.error(error);
+      setCommentsMap((current) => ({ ...current, [mediaId]: response.data?.data || [] }));
+    } catch {
+      toast.error('Failed to refresh comments.');
     }
-  };
+  }, []);
 
-  const handleToggleLike = async (mediaId: string) => {
-    if (!requireCustomer()) return;
+  const handleToggleLike = useCallback(async (mediaId: string) => {
+    if (!requireCustomerForPath(buildProviderUrl())) return;
+
+    const wasLiked = Boolean(likedMapRef.current[mediaId]);
+    const nextLiked = !wasLiked;
+
+    setActionMediaId(mediaId);
+    setLikedMap((current) => {
+      const nextState = { ...current, [mediaId]: nextLiked };
+      likedMapRef.current = nextState;
+      return nextState;
+    });
+    updateMediaItem(mediaId, (item) => ({
+      ...item,
+      likesCount: Math.max(0, Number(item.likesCount || 0) + (nextLiked ? 1 : -1)),
+    }));
 
     try {
-      setActionMediaId(mediaId);
-
-      if (likedMap[mediaId]) {
+      if (wasLiked) {
         await api.delete(`/provider-media/${mediaId}/like`);
-        setLikedMap((prev) => ({ ...prev, [mediaId]: false }));
       } else {
         await api.post(`/provider-media/${mediaId}/like`);
-        setLikedMap((prev) => ({ ...prev, [mediaId]: true }));
       }
-
-      await loadPage();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل تحديث الإعجاب');
+    } catch (requestError: any) {
+      setLikedMap((current) => {
+        const nextState = { ...current, [mediaId]: wasLiked };
+        likedMapRef.current = nextState;
+        return nextState;
+      });
+      updateMediaItem(mediaId, (item) => ({
+        ...item,
+        likesCount: Math.max(0, Number(item.likesCount || 0) + (wasLiked ? 1 : -1)),
+      }));
+      toast.error(requestError.response?.data?.message || 'Failed to update like state.');
     } finally {
       setActionMediaId(null);
     }
+  }, [buildProviderUrl, requireCustomerForPath, updateMediaItem]);
+
+  const handleAddComment = useCallback(async (mediaId: string) => {
+    if (!requireCustomerForPath(buildProviderUrl())) return;
+
+    const body = commentDraftsRef.current[mediaId]?.trim();
+    if (!body) {
+      toast.error('Write a comment first.');
+      return;
+    }
+
+    const optimisticComment: MediaComment = {
+      id: `temp-comment-${mediaId}-${Date.now()}`,
+      authorName: 'Sending...',
+      body,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      setActionMediaId(mediaId);
+      setCommentDrafts((current) => {
+        const nextDrafts = { ...current, [mediaId]: '' };
+        commentDraftsRef.current = nextDrafts;
+        return nextDrafts;
+      });
+      setCommentsMap((current) => ({
+        ...current,
+        [mediaId]: [optimisticComment, ...(current[mediaId] || [])],
+      }));
+
+      updateMediaItem(mediaId, (item) => ({
+        ...item,
+        commentsCount: Math.max(0, Number(item.commentsCount || 0) + 1),
+        latestComments: [optimisticComment, ...(item.latestComments || [])].slice(0, 3),
+      }));
+
+      const response = await api.post(`/provider-media/${mediaId}/comments`, { body });
+      const createdComment = response.data?.data as MediaComment | undefined;
+
+      if (createdComment) {
+        setCommentsMap((current) => ({
+          ...current,
+          [mediaId]: (current[mediaId] || []).map((comment) =>
+            comment.id === optimisticComment.id ? createdComment : comment
+          ),
+        }));
+
+        updateMediaItem(mediaId, (item) => ({
+          ...item,
+          latestComments: (item.latestComments || []).map((comment) =>
+            comment.id === optimisticComment.id ? createdComment : comment
+          ),
+        }));
+      }
+
+      toast.success('Comment added.');
+    } catch (requestError: any) {
+      setCommentDrafts((current) => {
+        const nextDrafts = { ...current, [mediaId]: body };
+        commentDraftsRef.current = nextDrafts;
+        return nextDrafts;
+      });
+      setCommentsMap((current) => ({
+        ...current,
+        [mediaId]: (current[mediaId] || []).filter(
+          (comment) => comment.id !== optimisticComment.id
+        ),
+      }));
+      updateMediaItem(mediaId, (item) => ({
+        ...item,
+        commentsCount: Math.max(0, Number(item.commentsCount || 0) - 1),
+        latestComments: (item.latestComments || []).filter(
+          (comment) => comment.id !== optimisticComment.id
+        ),
+      }));
+      toast.error(requestError.response?.data?.message || 'Failed to add the comment.');
+    } finally {
+      setActionMediaId(null);
+    }
+  }, [buildProviderUrl, requireCustomerForPath, updateMediaItem]);
+
+  const handleCommentDraftChange = useCallback((mediaId: string, value: string) => {
+    setCommentDrafts((current) => {
+      const nextDrafts = { ...current, [mediaId]: value };
+      commentDraftsRef.current = nextDrafts;
+      return nextDrafts;
+    });
+  }, []);
+
+  const stories = data?.stories || [];
+  const activeStoryIndex = storyIdParam
+    ? stories.findIndex((story) => story.id === storyIdParam)
+    : -1;
+  const activeStory =
+    activeStoryIndex >= 0 && activeStoryIndex < stories.length
+      ? stories[activeStoryIndex]
+      : null;
+
+  const openStory = (storyId: string) => {
+    setStoryReplyDraft('');
+    setStoryContext(storyId);
   };
 
-  const handleAddComment = async (mediaId: string) => {
-    if (!requireCustomer()) return;
+  const closeStory = () => {
+    setStoryReplyDraft('');
+    setStoryContext(null);
+  };
 
-    const body = commentDrafts[mediaId]?.trim();
-    if (!body) {
-      toast.error('اكتب تعليقًا أولًا');
+  const goPrevStory = () => {
+    if (activeStoryIndex <= 0) return;
+    openStory(stories[activeStoryIndex - 1].id);
+  };
+
+  const goNextStory = () => {
+    if (activeStoryIndex < 0 || activeStoryIndex >= stories.length - 1) return;
+    openStory(stories[activeStoryIndex + 1].id);
+  };
+
+  const handleStoryReply = async () => {
+    if (!activeStory) return;
+
+    const redirectPath = buildProviderUrl({ storyId: activeStory.id });
+
+    if (!requireCustomerForPath(redirectPath)) return;
+
+    if (!storyReplyDraft.trim()) {
+      toast.error('Write a reply first.');
       return;
     }
 
     try {
-      setActionMediaId(mediaId);
-      await api.post(`/provider-media/${mediaId}/comments`, {
-        body,
+      setReplyingToStory(true);
+      const response = await api.post(`/provider-media/stories/${activeStory.id}/reply`, {
+        body: storyReplyDraft.trim(),
       });
 
-      setCommentDrafts((prev) => ({
-        ...prev,
-        [mediaId]: '',
-      }));
+      const redirectTo =
+        response.data?.data?.redirectTo ||
+        `/customer/messages?conversationId=${response.data?.data?.conversationId || ''}`;
 
-      await refreshMediaComments(mediaId);
-      await loadPage();
-      toast.success('تمت إضافة التعليق');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل إضافة التعليق');
+      toast.success('Reply sent successfully.');
+      navigate(redirectTo);
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to send the story reply.');
     } finally {
-      setActionMediaId(null);
+      setReplyingToStory(false);
     }
   };
 
   if (loading) {
-    return <div style={pageWrap}>جاري تحميل صفحة المزود...</div>;
+    return (
+      <PublicMarketplaceLayout activeNav="explore">
+        <div className="grid gap-6 pt-8">
+          <div className="h-[320px] animate-pulse rounded-[30px] bg-white/80" />
+          <div className="h-[220px] animate-pulse rounded-[28px] bg-white/80" />
+          <div className="h-[420px] animate-pulse rounded-[28px] bg-white/80" />
+        </div>
+      </PublicMarketplaceLayout>
+    );
   }
 
-  if (!data) {
-    return <div style={pageWrap}>تعذر العثور على صفحة هذا المزود.</div>;
+  if (error || !data) {
+    return (
+      <PublicMarketplaceLayout activeNav="explore">
+        <div className="pt-8">
+          <div className="psp-error-state">
+            <div className="font-bold">Provider page unavailable.</div>
+            <div>{error || 'This provider could not be found.'}</div>
+            <button
+              type="button"
+              className="psp-button psp-button--primary mt-4"
+              onClick={() => navigate('/explore')}
+            >
+              Back to Explore
+            </button>
+          </div>
+        </div>
+      </PublicMarketplaceLayout>
+    );
   }
 
   const { provider, services, media } = data;
+  const providerLocation =
+    [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') || 'Algeria';
+  const ownerName = `${provider.owner.firstName} ${provider.owner.lastName}`.trim();
+
+  const canReplyToStory = Boolean(token && currentUser?.role === 'customer');
+  const replyButtonLabel = !token
+    ? 'Sign in to reply'
+    : currentUser?.role !== 'customer'
+      ? 'Customer account required'
+      : 'Reply in chat';
+  const replyPlaceholder = !token
+    ? 'Sign in with a customer account to reply to this story.'
+    : currentUser?.role !== 'customer'
+      ? 'Story replies are available to customer accounts.'
+      : 'Reply to this story...';
 
   return (
-    <div style={pageWrap}>
-      <div style={heroCard}>
-        <div
-          style={{
-            height: 240,
-            backgroundImage: provider.coverUrl
-              ? `url(${provider.coverUrl})`
-              : 'linear-gradient(135deg, #1d4ed8, #0f766e)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+    <PublicMarketplaceLayout activeNav="explore">
+      <div className="grid gap-8 pt-8">
+        <ProviderHero
+          provider={provider}
+          providerLocation={providerLocation}
+          ownerName={ownerName}
+          isFavorite={isFavorite}
+          storiesCount={stories.length}
+          onOpenStories={() => {
+            if (stories[0]) {
+              openStory(stories[0].id);
+            }
           }}
+          onMessage={handleContact}
+          onRequest={() => handleRequest()}
+          onToggleFavorite={toggleFavorite}
         />
 
-        <div style={{ padding: 20, display: 'flex', gap: 18, alignItems: 'center' }}>
-          <div style={avatarWrap}>
-            {provider.avatarUrl ? (
-              <img
-                src={provider.avatarUrl}
-                alt={provider.companyName}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : null}
-          </div>
+        <ProviderQuickNav
+          hasStories={stories.length > 0}
+          servicesCount={services.length}
+          mediaCount={media.length}
+          reviewsCount={reviews.length}
+          responseTimeMinutes={provider.responseTimeMinutes || 0}
+        />
 
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0, fontSize: 30 }}>{provider.companyName}</h1>
-              {provider.preference.profileBadgeText ? (
-                <span style={badgePurple}>{provider.preference.profileBadgeText}</span>
-              ) : null}
-              {provider.isVerified ? <span style={badgeGreen}>موثّق</span> : null}
-            </div>
+        <ProviderRequestPanel
+          visible={showRequestForm}
+          services={services}
+          requestForm={requestForm}
+          submitting={submittingRequest}
+          onClose={() => setShowRequestForm(false)}
+          onChange={(field, value) =>
+            setRequestForm((current) => ({
+              ...current,
+              [field]: value,
+            }))
+          }
+          onSubmit={() => void submitRequest()}
+        />
 
-            <div style={{ color: '#cbd5e1', marginTop: 8 }}>
-              {provider.owner.firstName} {provider.owner.lastName}
-            </div>
+        <ProviderServicesSection
+          services={services}
+          onRequest={handleRequest}
+          onExploreCategory={handleExploreCategory}
+        />
 
-            <div style={{ color: '#9fb0cc', marginTop: 8 }}>
-              {[provider.city, provider.wilaya, provider.region].filter(Boolean).join(' - ') ||
-                'الموقع غير محدد'}
-            </div>
+        <ProviderStoriesSection stories={stories} onOpenStory={openStory} />
 
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, color: '#d6deec' }}>
-              <div>الفئة: {provider.primaryCategory?.name || 'غير محددة'}</div>
-              <div>الخبرة: {provider.yearsOfExperience} سنة</div>
-              <div>
-                التقييم: {provider.averageRating} ⭐ ({provider.reviewsCount})
-              </div>
-              <div>زمن الرد: {provider.responseTimeMinutes || 0} دقيقة</div>
-            </div>
-          </div>
+        <ProviderMediaSection
+          media={media}
+          commentsMap={commentsMap}
+          commentDrafts={commentDrafts}
+          likedMap={likedMap}
+          actionMediaId={actionMediaId}
+          onRefreshComments={refreshMediaComments}
+          onToggleLike={handleToggleLike}
+          onDraftChange={handleCommentDraftChange}
+          onAddComment={handleAddComment}
+        />
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            <button onClick={handleContact} style={primaryButton}>
-              راسل المزود
-            </button>
-            <button onClick={handleRequest} style={secondaryButton}>
-              اطلب الخدمة
-            </button>
-            <button onClick={toggleFavorite} style={secondaryButton}>
-              {isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
-            </button>
-          </div>
-        </div>
+        <ProviderProfileDetails
+          provider={provider}
+          providerLocation={providerLocation}
+          customerGeo={customerGeo}
+        />
+
+        <ProviderReviewsSection
+          reviews={reviews}
+          reviewForm={reviewForm}
+          hasExistingReview={hasExistingReview}
+          onRatingChange={(rating) =>
+            setReviewForm((current) => ({
+              ...current,
+              rating,
+            }))
+          }
+          onCommentChange={(comment) =>
+            setReviewForm((current) => ({
+              ...current,
+              comment,
+            }))
+          }
+          onSubmit={() => void submitReview()}
+        />
       </div>
 
-      {showRequestForm ? (
-        <div style={sectionCard}>
-          <div style={sectionTitle}>طلب خدمة / Quote Request</div>
-
-          <div style={{ display: 'grid', gap: 12 }}>
-            <select
-              value={requestForm.serviceId}
-              onChange={(e) =>
-                setRequestForm((prev) => ({
-                  ...prev,
-                  serviceId: e.target.value,
-                }))
-              }
-              style={inputStyle}
-            >
-              <option value="">بدون خدمة محددة</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              value={requestForm.subject}
-              onChange={(e) =>
-                setRequestForm((prev) => ({
-                  ...prev,
-                  subject: e.target.value,
-                }))
-              }
-              placeholder="عنوان مختصر للطلب"
-              style={inputStyle}
-            />
-
-            <textarea
-              value={requestForm.description}
-              onChange={(e) =>
-                setRequestForm((prev) => ({
-                  ...prev,
-                  description: e.target.value,
-                }))
-              }
-              placeholder="اشرح طلبك بالتفصيل..."
-              style={{ ...inputStyle, minHeight: 130, resize: 'vertical' }}
-            />
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 12 }}>
-              <input
-                value={requestForm.budgetMin}
-                onChange={(e) =>
-                  setRequestForm((prev) => ({
-                    ...prev,
-                    budgetMin: e.target.value,
-                  }))
-                }
-                placeholder="الميزانية الدنيا"
-                style={inputStyle}
-              />
-
-              <input
-                value={requestForm.budgetMax}
-                onChange={(e) =>
-                  setRequestForm((prev) => ({
-                    ...prev,
-                    budgetMax: e.target.value,
-                  }))
-                }
-                placeholder="الميزانية القصوى"
-                style={inputStyle}
-              />
-
-              <input
-                value={requestForm.currencyCode}
-                onChange={(e) =>
-                  setRequestForm((prev) => ({
-                    ...prev,
-                    currencyCode: e.target.value,
-                  }))
-                }
-                placeholder="DZD"
-                style={inputStyle}
-              />
-            </div>
-
-            <input
-              type="datetime-local"
-              value={requestForm.preferredDate}
-              onChange={(e) =>
-                setRequestForm((prev) => ({
-                  ...prev,
-                  preferredDate: e.target.value,
-                }))
-              }
-              style={inputStyle}
-            />
-
-            <textarea
-              value={requestForm.initialMessage}
-              onChange={(e) =>
-                setRequestForm((prev) => ({
-                  ...prev,
-                  initialMessage: e.target.value,
-                }))
-              }
-              placeholder="رسالة أولية داخل المحادثة (اختياري)"
-              style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-            />
-
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={submitRequest} disabled={submittingRequest} style={primaryButton}>
-                {submittingRequest ? 'جاري الإرسال...' : 'إرسال الطلب'}
-              </button>
-
-              <button onClick={() => setShowRequestForm(false)} style={secondaryButton}>
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div style={sectionCard}>
-        <div style={sectionTitle}>نبذة مهنية</div>
-        <div style={bodyText}>
-          {provider.description || 'لا يوجد وصف مهني بعد.'}
-        </div>
-      </div>
-
-      <div style={twoCols}>
-        <div style={sectionCard}>
-          <div style={sectionTitle}>معلومات التواصل</div>
-          <div style={contactGrid}>
-            <div>
-              <strong>البريد:</strong>{' '}
-              {provider.contact.email || 'مخفي حسب إعدادات الخصوصية'}
-            </div>
-            <div>
-              <strong>الهاتف:</strong>{' '}
-              {provider.contact.phoneNumber || 'مخفي حسب إعدادات الخصوصية'}
-            </div>
-            <div>
-              <strong>العنوان:</strong>{' '}
-              {provider.contact.addressLine || 'مخفي حسب إعدادات الخصوصية'}
-            </div>
-          </div>
-        </div>
-
-        <div style={sectionCard}>
-          <div style={sectionTitle}>الخطة والظهور</div>
-          <div style={contactGrid}>
-            <div>
-              <strong>الخطة:</strong> {provider.preference.selectedPlan}
-            </div>
-            <div>
-              <strong>ظهور رئيسي:</strong>{' '}
-              {provider.preference.featuredOnHomepage ? 'نعم' : 'لا'}
-            </div>
-            <div>
-              <strong>التوثيق:</strong> {provider.isVerified ? 'نعم' : 'لا'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={sectionCard}>
-        <div style={sectionTitle}>الخدمات المنشورة</div>
-
-        {!services.length ? (
-          <div style={bodyText}>لا توجد خدمات منشورة بعد.</div>
-        ) : (
-          <div style={serviceGrid}>
-            {services.map((service) => (
-              <div key={service.id} style={serviceCard}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 800, fontSize: 18 }}>{service.name}</div>
-                  {service.isFeatured ? <span style={badgeBlue}>مميزة</span> : null}
-                  {service.showPromoBadge && service.promoBadgeText ? (
-                    <span style={badgePurple}>{service.promoBadgeText}</span>
-                  ) : null}
-                </div>
-
-                <div style={{ color: '#9fb0cc', marginTop: 8 }}>
-                  {service.category?.name || 'بدون فئة'} • {service.deliveryMode}
-                </div>
-
-                <div style={{ color: '#dce4f2', marginTop: 10 }}>
-                  {service.price
-                    ? `${service.price} ${service.currencyCode}`
-                    : 'السعر حسب الطلب'}
-                </div>
-
-                <div style={{ color: '#c9d3e4', marginTop: 10, lineHeight: 1.7 }}>
-                  {service.description}
-                </div>
-
-                <div style={{ color: '#90a4c3', marginTop: 10 }}>
-                  زمن الرد التقديري: {service.responseTimeHours} ساعة
-                </div>
-
-                <button
-                  onClick={() => {
-                    handleRequest();
-                    setRequestForm((prev) => ({
-                      ...prev,
-                      serviceId: service.id,
-                      subject: service.name,
-                    }));
-                  }}
-                  style={{ ...primaryButton, marginTop: 12 }}
-                >
-                  اطلب هذه الخدمة
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={sectionCard}>
-        <div style={sectionTitle}>الأعمال السابقة والوسائط</div>
-
-        {!media.length ? (
-          <div style={bodyText}>لا توجد أعمال منشورة بعد.</div>
-        ) : (
-          <div style={mediaGrid}>
-            {media.map((item) => (
-              <div key={item.id} style={mediaCard}>
-                <div style={{ position: 'relative', height: 240, background: '#09101b' }}>
-                  {item.mediaType === 'image' ? (
-                    <img
-                      src={item.mediaUrl}
-                      alt={item.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <video
-                      src={item.mediaUrl}
-                      poster={item.thumbnailUrl || undefined}
-                      controls
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  )}
-
-                  {item.showPromoBadge && item.promoBadgeText ? (
-                    <span style={{ ...badgePurple, position: 'absolute', top: 12, left: 12 }}>
-                      {item.promoBadgeText}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, fontSize: 18 }}>{item.title}</div>
-                    {item.isFeatured ? <span style={badgeBlue}>Featured</span> : null}
-                  </div>
-
-                  <div style={{ color: '#9fb0cc', marginTop: 8 }}>
-                    {item.service?.name || 'غير مربوط بخدمة'}
-                  </div>
-
-                  {item.description ? (
-                    <div style={{ color: '#dce4f2', marginTop: 10, lineHeight: 1.7 }}>
-                      {item.description}
-                    </div>
-                  ) : null}
-
-                  <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
-                    <button
-                      onClick={() => handleToggleLike(item.id)}
-                      disabled={actionMediaId === item.id}
-                      style={secondaryButton}
-                    >
-                      {likedMap[item.id] ? 'إلغاء الإعجاب' : 'إعجاب'} • ❤️ {item.likesCount}
-                    </button>
-
-                    <button
-                      onClick={() => refreshMediaComments(item.id)}
-                      disabled={actionMediaId === item.id}
-                      style={secondaryButton}
-                    >
-                      التعليقات • 💬 {item.commentsCount}
-                    </button>
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>التعليقات</div>
-
-                    {(commentsMap[item.id] || []).length === 0 ? (
-                      <div style={{ color: '#91a2bd' }}>لا توجد تعليقات بعد.</div>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        {(commentsMap[item.id] || []).map((comment) => (
-                          <div key={comment.id} style={commentCard}>
-                            <div style={{ fontWeight: 700 }}>{comment.authorName}</div>
-                            <div style={{ marginTop: 6, color: '#d7e0ef', lineHeight: 1.6 }}>
-                              {comment.body}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, marginTop: 12 }}>
-                      <input
-                        value={commentDrafts[item.id] || ''}
-                        onChange={(e) =>
-                          setCommentDrafts((prev) => ({
-                            ...prev,
-                            [item.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="اكتب تعليقك..."
-                        style={inputStyle}
-                      />
-                      <button
-                        onClick={() => handleAddComment(item.id)}
-                        disabled={actionMediaId === item.id}
-                        style={primaryButton}
-                      >
-                        تعليق
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={sectionCard}>
-        <div style={sectionTitle}>التقييمات</div>
-
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div style={reviewFormCard}>
-            <div style={{ fontWeight: 800, marginBottom: 10 }}>اترك تقييمك</div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr auto', gap: 12 }}>
-              <select
-                value={reviewForm.rating}
-                onChange={(e) =>
-                  setReviewForm((prev) => ({
-                    ...prev,
-                    rating: Number(e.target.value),
-                  }))
-                }
-                style={inputStyle}
-              >
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <option key={value} value={value}>
-                    {value} ⭐
-                  </option>
-                ))}
-              </select>
-
-              <input
-                value={reviewForm.comment}
-                onChange={(e) =>
-                  setReviewForm((prev) => ({
-                    ...prev,
-                    comment: e.target.value,
-                  }))
-                }
-                placeholder="اكتب تعليقك..."
-                style={inputStyle}
-              />
-
-              <button onClick={submitReview} style={primaryButton}>
-                إرسال
-              </button>
-            </div>
-          </div>
-
-          {!reviews.length ? (
-            <div style={bodyText}>لا توجد تقييمات بعد.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
-              {reviews.map((review) => (
-                <div key={review.id} style={reviewCard}>
-                  <div style={{ fontWeight: 800 }}>{review.authorName}</div>
-                  <div style={{ color: '#facc15', marginTop: 6 }}>{review.rating} ⭐</div>
-                  <div style={{ color: '#dce4f2', marginTop: 8, lineHeight: 1.7 }}>
-                    {review.comment || 'بدون تعليق'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      <StoryViewer
+        stories={stories}
+        activeIndex={activeStory ? activeStoryIndex : null}
+        replyDraft={storyReplyDraft}
+        replying={replyingToStory}
+        replyButtonLabel={replyButtonLabel}
+        replyPlaceholder={replyPlaceholder}
+        replyInputDisabled={!canReplyToStory}
+        replyActionDisabled={replyingToStory || (canReplyToStory && !storyReplyDraft.trim())}
+        onReplyDraftChange={setStoryReplyDraft}
+        onReply={handleStoryReply}
+        onClose={closeStory}
+        onPrev={goPrevStory}
+        onNext={goNextStory}
+        onProviderAction={() => closeStory()}
+        providerActionLabel="Browse provider profile"
+      />
+    </PublicMarketplaceLayout>
   );
-};
-
-const pageWrap: React.CSSProperties = {
-  minHeight: '100vh',
-  background: '#0b0f19',
-  color: '#f5f7fb',
-  padding: 24,
-  display: 'grid',
-  gap: 18,
-};
-
-const heroCard: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 24,
-  overflow: 'hidden',
-};
-
-const sectionCard: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 20,
-  padding: 18,
-};
-
-const reviewFormCard: React.CSSProperties = {
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  padding: 14,
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 800,
-  marginBottom: 12,
-};
-
-const bodyText: React.CSSProperties = {
-  color: '#d3dceb',
-  lineHeight: 1.8,
-};
-
-const twoCols: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: 16,
-};
-
-const contactGrid: React.CSSProperties = {
-  display: 'grid',
-  gap: 10,
-  color: '#dce4f2',
-  lineHeight: 1.7,
-};
-
-const serviceGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: 16,
-};
-
-const serviceCard: React.CSSProperties = {
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 18,
-  padding: 16,
-};
-
-const mediaGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: 16,
-};
-
-const mediaCard: React.CSSProperties = {
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 18,
-  overflow: 'hidden',
-};
-
-const commentCard: React.CSSProperties = {
-  background: '#0b1220',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 14,
-  padding: 12,
-};
-
-const reviewCard: React.CSSProperties = {
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  padding: 14,
-};
-
-const avatarWrap: React.CSSProperties = {
-  width: 92,
-  height: 92,
-  borderRadius: '50%',
-  overflow: 'hidden',
-  background: '#0f1728',
-  border: '3px solid rgba(255,255,255,0.12)',
-  flexShrink: 0,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 12,
-  border: '1px solid rgba(255,255,255,0.12)',
-  background: '#0b1220',
-  color: '#fff',
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: '12px 16px',
-  borderRadius: 12,
-  border: 'none',
-  background: '#2563eb',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const secondaryButton: React.CSSProperties = {
-  padding: '12px 16px',
-  borderRadius: 12,
-  border: '1px solid rgba(255,255,255,0.12)',
-  background: '#172033',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const badgePurple: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '5px 10px',
-  borderRadius: 999,
-  background: '#7c3aed',
-  color: '#fff',
-  fontWeight: 700,
-  fontSize: 12,
-};
-
-const badgeGreen: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '5px 10px',
-  borderRadius: 999,
-  background: '#15803d',
-  color: '#fff',
-  fontWeight: 700,
-  fontSize: 12,
-};
-
-const badgeBlue: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '5px 10px',
-  borderRadius: 999,
-  background: '#1d4ed8',
-  color: '#fff',
-  fontWeight: 700,
-  fontSize: 12,
 };
 
 export default PublicProviderPage;

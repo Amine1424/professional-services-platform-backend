@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCcw, Settings2, ShieldAlert } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../config/api';
+import '../styles/app-primitives.css';
 
 interface SettingsPayload {
   platformName: string;
@@ -11,7 +13,7 @@ interface SettingsPayload {
   systemNotificationsEnabled: boolean;
 }
 
-export const AdminSettings: React.FC = () => {
+const AdminSettings: React.FC = () => {
   const [form, setForm] = useState<SettingsPayload>({
     platformName: '',
     seoTitle: '',
@@ -20,131 +22,252 @@ export const AdminSettings: React.FC = () => {
     maintenanceMessage: '',
     systemNotificationsEnabled: true,
   });
-
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/admin/settings');
-      setForm(response.data?.data || form);
-    } catch (error) {
-      console.error(error);
+      setForm((current) => response.data?.data || current);
+      setError(null);
+    } catch (requestError: any) {
+      setError(requestError.response?.data?.message || 'Failed to load platform settings.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const save = async () => {
     try {
+      setSaving(true);
       await api.put('/admin/settings', form);
-      toast.success('تم حفظ الإعدادات');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل الحفظ');
+      toast.success('Platform settings saved.');
+      setError(null);
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to save settings.');
+    } finally {
+      setSaving(false);
     }
   };
 
+  const healthSignals = useMemo(
+    () => [
+      {
+        label: 'Maintenance mode',
+        value: form.maintenanceMode ? 'Enabled' : 'Disabled',
+        caption: form.maintenanceMode
+          ? 'Public access is expected to show the maintenance message.'
+          : 'The marketplace is currently open to users.',
+      },
+      {
+        label: 'System notifications',
+        value: form.systemNotificationsEnabled ? 'Enabled' : 'Disabled',
+        caption: form.systemNotificationsEnabled
+          ? 'Core system updates can still reach users.'
+          : 'Platform-level notifications are paused.',
+      },
+      {
+        label: 'SEO status',
+        value: form.seoTitle?.trim() ? 'Configured' : 'Needs review',
+        caption: form.seoDescription?.trim()
+          ? 'Search metadata has both title and description.'
+          : 'Description metadata is still incomplete.',
+      },
+    ],
+    [form]
+  );
+
   if (loading) {
-    return <div style={{ color: '#fff' }}>جاري تحميل الإعدادات...</div>;
+    return (
+      <div className="psp-page-stack">
+        <div className="h-[220px] animate-pulse rounded-[30px] bg-white/80" />
+        <div className="h-[320px] animate-pulse rounded-[28px] bg-white/80" />
+      </div>
+    );
+  }
+
+  if (error && !form.platformName && !form.seoTitle) {
+    return (
+      <div className="psp-error-state">
+        <div className="font-bold">Platform settings unavailable.</div>
+        <div>{error}</div>
+      </div>
+    );
   }
 
   return (
-    <div style={cardStyle}>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <input
-          value={form.platformName}
-          onChange={(e) => setForm((p) => ({ ...p, platformName: e.target.value }))}
-          placeholder="اسم المنصة"
-          style={inputStyle}
-        />
+    <div className="psp-page-stack">
+      <section className="overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#0f172a,#4338ca_42%,#38bdf8)] p-6 text-white shadow-[0_26px_55px_rgba(15,23,42,0.14)]">
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold tracking-[0.14em] text-white/90">
+              <Settings2 size={14} />
+              Platform posture
+            </div>
+            <h2 className="mt-5 text-[34px] font-black tracking-tight md:text-[42px]">
+              Control how the marketplace presents itself and behaves globally
+            </h2>
+            <p className="mt-4 max-w-[620px] text-[15px] leading-8 text-white/82">
+              These settings affect platform identity, public metadata, maintenance posture, and whether
+              system-level notifications remain active across the product.
+            </p>
+          </div>
 
-        <input
-          value={form.seoTitle}
-          onChange={(e) => setForm((p) => ({ ...p, seoTitle: e.target.value }))}
-          placeholder="SEO Title"
-          style={inputStyle}
-        />
+          <div className="grid gap-4 rounded-[28px] bg-white/10 p-4 backdrop-blur">
+            {healthSignals.map((item) => (
+              <div key={item.label} className="rounded-[22px] bg-white/10 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">{item.label}</div>
+                <div className="mt-2 text-[22px] font-black">{item.value}</div>
+                <div className="mt-2 text-sm leading-6 text-white/70">{item.caption}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-        <textarea
-          value={form.seoDescription}
-          onChange={(e) => setForm((p) => ({ ...p, seoDescription: e.target.value }))}
-          placeholder="SEO Description"
-          style={{ ...inputStyle, minHeight: 100 }}
-        />
+      {error ? <div className="psp-error-state">{error}</div> : null}
 
-        <label style={checkRow}>
-          <input
-            type="checkbox"
-            checked={form.maintenanceMode}
-            onChange={(e) => setForm((p) => ({ ...p, maintenanceMode: e.target.checked }))}
-          />
-          تفعيل وضع الصيانة
-        </label>
+      <section className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
+        <article className="psp-surface">
+          <div className="psp-surface__header">
+            <div>
+              <h2>Identity and SEO</h2>
+              <div className="psp-surface__sub">
+                Keep brand naming and marketplace metadata aligned before launch or marketing pushes.
+              </div>
+            </div>
+            <button type="button" className="psp-button psp-button--secondary" onClick={() => void load()}>
+              <RefreshCcw size={16} />
+              Reload
+            </button>
+          </div>
 
-        <textarea
-          value={form.maintenanceMessage}
-          onChange={(e) => setForm((p) => ({ ...p, maintenanceMessage: e.target.value }))}
-          placeholder="رسالة الصيانة"
-          style={{ ...inputStyle, minHeight: 100 }}
-        />
+          <div className="grid gap-4">
+            <label className="grid gap-2">
+              <span className="text-sm font-bold text-slate-700">Platform name</span>
+              <input
+                value={form.platformName}
+                onChange={(event) => setForm((current) => ({ ...current, platformName: event.target.value }))}
+                className="psp-input"
+                placeholder="ProServices Algeria"
+              />
+            </label>
 
-        <label style={checkRow}>
-          <input
-            type="checkbox"
-            checked={form.systemNotificationsEnabled}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                systemNotificationsEnabled: e.target.checked,
-              }))
-            }
-          />
-          تفعيل إشعارات النظام
-        </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-bold text-slate-700">SEO title</span>
+              <input
+                value={form.seoTitle}
+                onChange={(event) => setForm((current) => ({ ...current, seoTitle: event.target.value }))}
+                className="psp-input"
+                placeholder="Professional services marketplace in Algeria"
+              />
+            </label>
 
-        <button onClick={save} style={primaryButton}>
-          حفظ الإعدادات
-        </button>
-      </div>
+            <label className="grid gap-2">
+              <span className="text-sm font-bold text-slate-700">SEO description</span>
+              <textarea
+                value={form.seoDescription}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, seoDescription: event.target.value }))
+                }
+                className="psp-textarea"
+                placeholder="Describe the marketplace for search engines and previews."
+              />
+            </label>
+          </div>
+        </article>
+
+        <article className="psp-surface">
+          <div className="psp-surface__header">
+            <div>
+              <h2>Runtime controls</h2>
+              <div className="psp-surface__sub">
+                Toggle global maintenance state and platform notifications without touching code.
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <label className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.maintenanceMode}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, maintenanceMode: event.target.checked }))
+                }
+              />
+              Maintenance mode is active
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-bold text-slate-700">Maintenance message</span>
+              <textarea
+                value={form.maintenanceMessage}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, maintenanceMessage: event.target.value }))
+                }
+                className="psp-textarea"
+                placeholder="Explain why the platform is temporarily unavailable."
+              />
+            </label>
+
+            <label className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.systemNotificationsEnabled}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    systemNotificationsEnabled: event.target.checked,
+                  }))
+                }
+              />
+              System notifications are enabled
+            </label>
+
+            {form.maintenanceMode ? (
+              <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-800">
+                <div className="inline-flex items-center gap-2 font-bold">
+                  <ShieldAlert size={16} />
+                  Maintenance mode warning
+                </div>
+                <div className="mt-2">
+                  When enabled, verify that the public message is explicit and that admins know the expected
+                  rollback plan.
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </article>
+      </section>
+
+      <section className="psp-surface">
+        <div className="psp-surface__header">
+          <div>
+            <h2>Commit platform settings</h2>
+            <div className="psp-surface__sub">
+              Save after confirming brand, metadata, maintenance messaging, and notification posture.
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="psp-button psp-button--primary" disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving settings...' : 'Save platform settings'}
+          </button>
+          <button type="button" className="psp-button psp-button--secondary" disabled={saving} onClick={() => void load()}>
+            Reset from server
+          </button>
+        </div>
+      </section>
     </div>
   );
-};
-
-const cardStyle: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 18,
-  padding: 18,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 14px',
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 12,
-  color: '#fff',
-};
-
-const checkRow: React.CSSProperties = {
-  color: '#fff',
-  display: 'flex',
-  gap: 10,
-  alignItems: 'center',
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: '12px 16px',
-  background: '#2563eb',
-  border: 'none',
-  borderRadius: 12,
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
 };
 
 export default AdminSettings;

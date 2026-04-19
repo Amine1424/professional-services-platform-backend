@@ -17,6 +17,14 @@ interface RegisterPayload {
   acceptTerms: boolean;
   phone?: string;
   companyName?: string;
+  primaryCategoryId?: string;
+  region?: string;
+  wilaya?: string;
+  city?: string;
+  yearsOfExperience?: number;
+  description?: string;
+  serviceCoverageMode?: 'wilaya_only' | 'regional' | 'nationwide';
+  serviceCoverageRegions?: string[];
 }
 
 interface AuthApiResponse {

@@ -1,8 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Camera,
+  Globe,
+  Heart,
+  Lock,
+  MessageCircle,
+  PlayCircle,
+  Sparkles,
+  Upload,
+} from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../config/api';
+import '../styles/app-primitives.css';
 
 type MediaType = 'image' | 'video';
+type StoryAudience = 'public' | 'favorites_only';
+type PortfolioFilter = 'all' | 'image' | 'video' | 'published' | 'story';
 
 interface ServiceItem {
   id: string;
@@ -25,6 +38,9 @@ interface PortfolioItem {
   sortOrder: number;
   likesCount: number;
   commentsCount: number;
+  isStory: boolean;
+  storyAudience: StoryAudience;
+  storyExpiresAt?: string | null;
 }
 
 interface CommentItem {
@@ -46,9 +62,25 @@ interface PreferencePayload {
   };
 }
 
-const emptyForm = {
+interface PortfolioFormState {
+  serviceId: string;
+  mediaType: MediaType;
+  mediaUrl: string;
+  thumbnailUrl: string;
+  title: string;
+  description: string;
+  isPublished: boolean;
+  isFeatured: boolean;
+  showPromoBadge: boolean;
+  promoBadgeText: string;
+  sortOrder: number;
+  isStory: boolean;
+  storyAudience: StoryAudience;
+}
+
+const emptyForm: PortfolioFormState = {
   serviceId: '',
-  mediaType: 'image' as MediaType,
+  mediaType: 'image',
   mediaUrl: '',
   thumbnailUrl: '',
   title: '',
@@ -58,22 +90,24 @@ const emptyForm = {
   showPromoBadge: false,
   promoBadgeText: '',
   sortOrder: 0,
+  isStory: false,
+  storyAudience: 'public',
 };
 
-export const ProviderPortfolio: React.FC = () => {
+const ProviderPortfolio: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [preferenceData, setPreferenceData] = useState<PreferencePayload | null>(null);
-
+  const [filter, setFilter] = useState<PortfolioFilter>('all');
   const [commentsMap, setCommentsMap] = useState<Record<string, CommentItem[]>>({});
   const [openCommentsMediaId, setOpenCommentsMediaId] = useState<string | null>(null);
   const [commentsLoadingId, setCommentsLoadingId] = useState<string | null>(null);
-
-  const [form, setForm] = useState(emptyForm);
+  const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  const [selectedThumbnailFile, setSelectedThumbnailFile] = useState<File | null>(null);
+  const [form, setForm] = useState<PortfolioFormState>(emptyForm);
 
   const loadData = async () => {
     try {
@@ -82,109 +116,132 @@ export const ProviderPortfolio: React.FC = () => {
         api.get('/providers/me/services'),
       ]);
 
-      setItems(mediaRes.data?.data?.items || []);
+      setItems((mediaRes.data?.data?.items || []) as PortfolioItem[]);
       setPreferenceData({
         preference: mediaRes.data?.data?.preference,
         planFeatures: mediaRes.data?.data?.planFeatures,
       });
-
       setServices(
         (servicesRes.data?.data || []).map((service: any) => ({
           id: service.id,
           name: service.name,
         }))
       );
-    } catch (error) {
-      console.error(error);
-      toast.error('فشل تحميل الأعمال والوسائط');
+    } catch {
+      toast.error('Failed to load portfolio data.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const stats = useMemo(() => {
     const images = items.filter((item) => item.mediaType === 'image').length;
     const videos = items.filter((item) => item.mediaType === 'video').length;
-    const totalLikes = items.reduce((sum, item) => sum + item.likesCount, 0);
-    const totalComments = items.reduce((sum, item) => sum + item.commentsCount, 0);
+    const stories = items.filter((item) => item.isStory).length;
+    const totalLikes = items.reduce((sum, item) => sum + Number(item.likesCount || 0), 0);
 
     return {
       total: items.length,
       images,
       videos,
+      stories,
       totalLikes,
-      totalComments,
     };
   }, [items]);
 
+  const filteredItems = useMemo(() => {
+    if (filter === 'all') return items;
+    if (filter === 'published') return items.filter((item) => item.isPublished);
+    if (filter === 'story') return items.filter((item) => item.isStory);
+    return items.filter((item) => item.mediaType === filter);
+  }, [filter, items]);
+
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    const target = e.target as HTMLInputElement;
+    const target = event.target as HTMLInputElement;
     const { name, value, type } = target;
 
-    setForm((prev) => ({
-      ...prev,
+    if (name === 'mediaType') {
+      setSelectedMediaFile(null);
+      setSelectedThumbnailFile(null);
+    }
+
+    setForm((current) => ({
+      ...current,
       [name]:
         type === 'checkbox'
           ? target.checked
           : name === 'sortOrder'
-          ? Number(value)
-          : value,
+            ? Number(value)
+            : value,
     }));
   };
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setSelectedMediaFile(null);
+    setSelectedThumbnailFile(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (!form.title.trim()) {
-      toast.error('عنوان العمل مطلوب');
+      toast.error('Title is required.');
       return;
     }
 
-    if (!form.mediaUrl.trim()) {
-      toast.error('رابط الصورة أو الفيديو مطلوب');
+    if (!editingId && !selectedMediaFile) {
+      toast.error('Choose an image or video first.');
       return;
     }
 
     try {
       setSaving(true);
 
-      const payload = {
-        serviceId: form.serviceId || null,
-        mediaType: form.mediaType,
-        mediaUrl: form.mediaUrl.trim(),
-        thumbnailUrl: form.thumbnailUrl.trim() || null,
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        isPublished: form.isPublished,
-        isFeatured: form.isFeatured,
-        showPromoBadge: form.showPromoBadge,
-        promoBadgeText: form.promoBadgeText.trim() || null,
-        sortOrder: Number(form.sortOrder) || 0,
-      };
+      const payload = new FormData();
+      payload.append('serviceId', form.serviceId);
+      payload.append('mediaType', form.mediaType);
+      payload.append('title', form.title.trim());
+      payload.append('description', form.description.trim());
+      payload.append('isPublished', String(form.isPublished));
+      payload.append('isFeatured', String(form.isFeatured));
+      payload.append('showPromoBadge', String(form.showPromoBadge));
+      payload.append('promoBadgeText', form.promoBadgeText.trim());
+      payload.append('sortOrder', String(Number(form.sortOrder) || 0));
+      payload.append('isStory', String(form.isStory));
+      payload.append('storyAudience', form.storyAudience);
+
+      if (selectedMediaFile) {
+        payload.append('mediaFile', selectedMediaFile);
+      }
+
+      if (form.mediaType === 'video' && selectedThumbnailFile) {
+        payload.append('thumbnailFile', selectedThumbnailFile);
+      }
 
       if (editingId) {
         await api.put(`/provider-media/${editingId}`, payload);
-        toast.success('تم تحديث العمل');
+        toast.success('Item updated successfully.');
       } else {
         await api.post('/provider-media', payload);
-        toast.success('تمت إضافة العمل');
+        toast.success(
+          form.isStory
+            ? 'Story published successfully.'
+            : 'Portfolio item published successfully.'
+        );
       }
 
       resetForm();
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشلت العملية');
+      await loadData();
+    } catch (requestError: any) {
+      toast.error(requestError?.response?.data?.message || 'Action failed.');
     } finally {
       setSaving(false);
     }
@@ -192,6 +249,8 @@ export const ProviderPortfolio: React.FC = () => {
 
   const handleEdit = (item: PortfolioItem) => {
     setEditingId(item.id);
+    setSelectedMediaFile(null);
+    setSelectedThumbnailFile(null);
     setForm({
       serviceId: item.serviceId || '',
       mediaType: item.mediaType,
@@ -204,20 +263,21 @@ export const ProviderPortfolio: React.FC = () => {
       showPromoBadge: item.showPromoBadge,
       promoBadgeText: item.promoBadgeText || '',
       sortOrder: item.sortOrder || 0,
+      isStory: item.isStory,
+      storyAudience: item.storyAudience || 'public',
     });
   };
 
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('هل تريد حذف هذا العمل؟');
-    if (!confirmed) return;
+    if (!window.confirm('Delete this item?')) return;
 
     try {
       await api.delete(`/provider-media/${id}`);
-      toast.success('تم حذف العمل');
+      toast.success('Item deleted successfully.');
       if (editingId === id) resetForm();
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل حذف العمل');
+      await loadData();
+    } catch (requestError: any) {
+      toast.error(requestError?.response?.data?.message || 'Failed to delete the item.');
     }
   };
 
@@ -225,14 +285,13 @@ export const ProviderPortfolio: React.FC = () => {
     try {
       setCommentsLoadingId(mediaId);
       const response = await api.get(`/provider-media/${mediaId}/comments`);
-      setCommentsMap((prev) => ({
-        ...prev,
-        [mediaId]: response.data?.data || [],
+      setCommentsMap((current) => ({
+        ...current,
+        [mediaId]: (response.data?.data || []) as CommentItem[],
       }));
       setOpenCommentsMediaId(mediaId);
-    } catch (error) {
-      console.error(error);
-      toast.error('فشل تحميل التعليقات');
+    } catch {
+      toast.error('Failed to load comments.');
     } finally {
       setCommentsLoadingId(null);
     }
@@ -241,396 +300,459 @@ export const ProviderPortfolio: React.FC = () => {
   const handleDeleteComment = async (commentId: string, mediaId: string) => {
     try {
       await api.delete(`/provider-media/comments/${commentId}`);
-      toast.success('تم حذف التعليق');
+      toast.success('Comment deleted successfully.');
       await loadComments(mediaId);
       await loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل حذف التعليق');
+    } catch (requestError: any) {
+      toast.error(
+        requestError?.response?.data?.message || 'Failed to delete the comment.'
+      );
     }
   };
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '430px 1fr', gap: 18 }}>
-      <div style={panelStyle}>
-        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 12 }}>
-          {editingId ? 'تعديل عمل / وسيط' : 'إضافة عمل جديد'}
-        </div>
-
-        <div
-          style={{
-            marginBottom: 14,
-            padding: 12,
-            borderRadius: 14,
-            background: 'rgba(255,255,255,0.04)',
-            color: '#d3dbeb',
-            lineHeight: 1.7,
-          }}
-        >
-          الخطة الحالية: <strong>{preferenceData?.preference.selectedPlan || 'basic'}</strong>
-          <br />
-          ستيكر العرض: {preferenceData?.planFeatures.canUseServicePromoBadge ? 'متاح' : 'غير متاح'}
-          <br />
-          تمييز العمل: {preferenceData?.planFeatures.canFeatureServices ? 'متاح' : 'غير متاح'}
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }}>
-          <div>
-            <label style={labelStyle}>عنوان العمل</label>
-            <input name="title" value={form.title} onChange={handleChange} style={inputStyle} />
-          </div>
-
-          <div>
-            <label style={labelStyle}>نوع الوسيط</label>
-            <select name="mediaType" value={form.mediaType} onChange={handleChange} style={inputStyle}>
-              <option value="image">image</option>
-              <option value="video">video</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>رابط الصورة / الفيديو</label>
-            <input
-              name="mediaUrl"
-              value={form.mediaUrl}
-              onChange={handleChange}
-              placeholder="https://..."
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>رابط Thumbnail للفيديو (اختياري)</label>
-            <input
-              name="thumbnailUrl"
-              value={form.thumbnailUrl}
-              onChange={handleChange}
-              placeholder="https://..."
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>ربط بخدمة</label>
-            <select name="serviceId" value={form.serviceId} onChange={handleChange} style={inputStyle}>
-              <option value="">بدون ربط</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>الوصف</label>
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>الترتيب</label>
-            <input
-              type="number"
-              name="sortOrder"
-              value={form.sortOrder}
-              onChange={handleChange}
-              style={inputStyle}
-            />
-          </div>
-
-          <label style={checkRowStyle}>
-            <input
-              type="checkbox"
-              name="isPublished"
-              checked={form.isPublished}
-              onChange={handleChange}
-            />
-            نشر هذا العمل للعامة
-          </label>
-
-          <label style={checkRowStyle}>
-            <input
-              type="checkbox"
-              name="isFeatured"
-              checked={form.isFeatured}
-              onChange={handleChange}
-            />
-            تمييز هذا العمل
-          </label>
-
-          <label style={checkRowStyle}>
-            <input
-              type="checkbox"
-              name="showPromoBadge"
-              checked={form.showPromoBadge}
-              onChange={handleChange}
-            />
-            إظهار ستيكر / عرض على هذا العمل
-          </label>
-
-          <div>
-            <label style={labelStyle}>نص الستيكر</label>
-            <input
-              name="promoBadgeText"
-              value={form.promoBadgeText}
-              onChange={handleChange}
-              placeholder="مثال: عرض اليوم / جديد / -15%"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button type="submit" disabled={saving} style={primaryButton}>
-              {saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديلات' : 'إضافة العمل'}
-            </button>
-
-            <button type="button" onClick={resetForm} style={secondaryButton}>
-              تفريغ
-            </button>
-          </div>
-        </form>
+  if (loading) {
+    return (
+      <div className="psp-page-stack">
+        <div className="h-[240px] animate-pulse rounded-[30px] bg-white/80" />
+        <div className="h-[360px] animate-pulse rounded-[28px] bg-white/80" />
       </div>
+    );
+  }
 
-      <div style={{ display: 'grid', gap: 16 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-            gap: 16,
-          }}
-        >
-          <div style={panelStyle}>
-            <div style={{ color: '#96a2bd' }}>كل الأعمال</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{stats.total}</div>
-          </div>
-          <div style={panelStyle}>
-            <div style={{ color: '#96a2bd' }}>صور</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{stats.images}</div>
-          </div>
-          <div style={panelStyle}>
-            <div style={{ color: '#96a2bd' }}>فيديوهات</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{stats.videos}</div>
-          </div>
-          <div style={panelStyle}>
-            <div style={{ color: '#96a2bd' }}>إجمالي اللايكات</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{stats.totalLikes}</div>
-          </div>
-          <div style={panelStyle}>
-            <div style={{ color: '#96a2bd' }}>إجمالي التعليقات</div>
-            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{stats.totalComments}</div>
-          </div>
-        </div>
-
-        <div style={panelStyle}>
-          <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 12 }}>
-            الأرشيف المرئي للأعمال
+  return (
+    <div className="psp-page-stack">
+      <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+        <article className="psp-surface">
+          <div className="psp-surface__header">
+            <div>
+              <h2>{editingId ? 'Edit media / story' : 'Publish portfolio item or story'}</h2>
+              <div className="psp-surface__sub">
+                Stories now support two audiences: public and favorite-followers only.
+              </div>
+            </div>
           </div>
 
-          {loading ? (
-            <div>جاري تحميل الأعمال...</div>
-          ) : items.length === 0 ? (
-            <div style={{ color: '#aeb8cd' }}>لا توجد أعمال منشورة بعد.</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 18,
-                    overflow: 'hidden',
-                    background: '#0f1728',
-                  }}
+          <div className="mb-5 rounded-[24px] bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+            Current plan:{' '}
+            <strong className="text-slate-900">
+              {preferenceData?.preference.selectedPlan || 'basic'}
+            </strong>
+          </div>
+
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <div>
+              <div className="mb-2 text-sm font-bold text-slate-700">Title</div>
+              <input
+                name="title"
+                value={form.title}
+                onChange={handleChange}
+                className="psp-input"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="mb-2 text-sm font-bold text-slate-700">Media type</div>
+                <select
+                  name="mediaType"
+                  value={form.mediaType}
+                  onChange={handleChange}
+                  className="psp-select"
                 >
-                  <div style={{ position: 'relative', height: 220, background: '#060b14' }}>
-                    {item.mediaType === 'image' ? (
-                      <img
-                        src={item.mediaUrl}
-                        alt={item.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <video
-                        src={item.mediaUrl}
-                        poster={item.thumbnailUrl || undefined}
-                        controls
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    )}
+                  <option value="image">image</option>
+                  <option value="video">video</option>
+                </select>
+              </div>
 
-                    {item.showPromoBadge && item.promoBadgeText ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 12,
-                          left: 12,
-                          padding: '6px 10px',
-                          borderRadius: 999,
-                          background: '#7c3aed',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: 12,
-                        }}
-                      >
-                        {item.promoBadgeText}
-                      </div>
-                    ) : null}
-                  </div>
+              <div>
+                <div className="mb-2 text-sm font-bold text-slate-700">Related service</div>
+                <select
+                  name="serviceId"
+                  value={form.serviceId}
+                  onChange={handleChange}
+                  className="psp-select"
+                >
+                  <option value="">No linked service</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-                  <div style={{ padding: 14 }}>
-                    <div style={{ fontWeight: 800, fontSize: 18 }}>{item.title}</div>
-                    <div style={{ color: '#9fb0cc', marginTop: 6 }}>
-                      {item.service?.name || 'بدون ربط بخدمة'} • {item.isPublished ? 'published' : 'hidden'}
-                    </div>
+            <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                name="isStory"
+                checked={form.isStory}
+                onChange={handleChange}
+              />
+              Publish this as a story (expires automatically after 24 hours)
+            </label>
 
-                    {item.description ? (
-                      <div style={{ color: '#d3dceb', marginTop: 10, lineHeight: 1.7 }}>
-                        {item.description}
-                      </div>
-                    ) : null}
+            {form.isStory ? (
+              <div>
+                <div className="mb-2 text-sm font-bold text-slate-700">Story audience</div>
+                <select
+                  name="storyAudience"
+                  value={form.storyAudience}
+                  onChange={handleChange}
+                  className="psp-select"
+                >
+                  <option value="public">Public — everyone can see it</option>
+                  <option value="favorites_only">
+                    Favorites only — only customers who favorited you
+                  </option>
+                </select>
+              </div>
+            ) : null}
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: 16,
-                        marginTop: 12,
-                        color: '#c7d0e1',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <div>❤️ {item.likesCount}</div>
-                      <div>💬 {item.commentsCount}</div>
-                    </div>
+            <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-slate-700">
+                <Upload size={14} />
+                Main file
+              </div>
+              <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+                <span>
+                  {selectedMediaFile
+                    ? selectedMediaFile.name
+                    : 'Choose image or video from computer'}
+                </span>
+                <Camera size={16} />
+                <input
+                  type="file"
+                  accept={form.mediaType === 'video' ? 'video/*' : 'image/*'}
+                  className="hidden"
+                  onChange={(event) => setSelectedMediaFile(event.target.files?.[0] || null)}
+                />
+              </label>
+            </div>
 
-                    <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-                      <button onClick={() => handleEdit(item)} style={secondaryButton}>
-                        تعديل
-                      </button>
-
-                      <button onClick={() => handleDelete(item.id)} style={dangerButton}>
-                        حذف
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          openCommentsMediaId === item.id
-                            ? setOpenCommentsMediaId(null)
-                            : loadComments(item.id)
-                        }
-                        style={secondaryButton}
-                      >
-                        {commentsLoadingId === item.id
-                          ? 'جاري التحميل...'
-                          : openCommentsMediaId === item.id
-                          ? 'إخفاء التعليقات'
-                          : 'عرض التعليقات'}
-                      </button>
-                    </div>
-
-                    {openCommentsMediaId === item.id ? (
-                      <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-                        {(commentsMap[item.id] || []).length === 0 ? (
-                          <div style={{ color: '#aeb8cd' }}>لا توجد تعليقات بعد.</div>
-                        ) : (
-                          commentsMap[item.id].map((comment) => (
-                            <div
-                              key={comment.id}
-                              style={{
-                                background: '#0b1220',
-                                border: '1px solid rgba(255,255,255,0.06)',
-                                borderRadius: 14,
-                                padding: 12,
-                              }}
-                            >
-                              <div style={{ fontWeight: 700 }}>{comment.authorName}</div>
-                              <div style={{ color: '#d3dceb', marginTop: 6, lineHeight: 1.7 }}>
-                                {comment.body}
-                              </div>
-
-                              <button
-                                onClick={() => handleDeleteComment(comment.id, item.id)}
-                                style={{ ...dangerButton, marginTop: 10 }}
-                              >
-                                حذف التعليق
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
+            {form.mediaType === 'video' ? (
+              <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <Upload size={14} />
+                  Video thumbnail
                 </div>
+                <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+                  <span>
+                    {selectedThumbnailFile
+                      ? selectedThumbnailFile.name
+                      : 'Optional thumbnail image'}
+                  </span>
+                  <Camera size={16} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) =>
+                      setSelectedThumbnailFile(event.target.files?.[0] || null)
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <div>
+              <div className="mb-2 text-sm font-bold text-slate-700">Description</div>
+              <textarea
+                name="description"
+                value={form.description}
+                onChange={handleChange}
+                className="psp-textarea"
+              />
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm font-bold text-slate-700">Sort order</div>
+              <input
+                type="number"
+                name="sortOrder"
+                value={form.sortOrder}
+                onChange={handleChange}
+                className="psp-input"
+              />
+            </div>
+
+            <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                name="isPublished"
+                checked={form.isPublished}
+                onChange={handleChange}
+              />
+              Publish this item
+            </label>
+
+            <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                name="isFeatured"
+                checked={form.isFeatured}
+                onChange={handleChange}
+              />
+              Mark as featured work
+            </label>
+
+            <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                name="showPromoBadge"
+                checked={form.showPromoBadge}
+                onChange={handleChange}
+              />
+              Show promo badge
+            </label>
+
+            <div>
+              <div className="mb-2 text-sm font-bold text-slate-700">Promo badge text</div>
+              <input
+                name="promoBadgeText"
+                value={form.promoBadgeText}
+                onChange={handleChange}
+                className="psp-input"
+                placeholder="New / Popular / Fast delivery"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button type="submit" disabled={saving} className="psp-button psp-button--primary">
+                {saving
+                  ? 'Saving...'
+                  : editingId
+                    ? 'Save changes'
+                    : form.isStory
+                      ? 'Publish story'
+                      : 'Publish item'}
+              </button>
+              <button
+                type="button"
+                className="psp-button psp-button--secondary"
+                onClick={resetForm}
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+        </article>
+
+        <div className="grid gap-6">
+          <section className="psp-stat-grid">
+            {[
+              { label: 'Total items', value: stats.total, icon: Camera },
+              { label: 'Images', value: stats.images, icon: Camera },
+              { label: 'Videos', value: stats.videos, icon: PlayCircle },
+              { label: 'Stories', value: stats.stories, icon: Sparkles },
+              { label: 'Likes', value: stats.totalLikes, icon: Heart },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <article key={item.label} className="psp-stat-card">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <Icon size={18} />
+                  </div>
+                  <div className="psp-stat-card__label mt-4">{item.label}</div>
+                  <div className="psp-stat-card__value">{item.value}</div>
+                </article>
+              );
+            })}
+          </section>
+
+          <section className="psp-surface">
+            <div className="psp-surface__header">
+              <div>
+                <h2>Media archive</h2>
+              </div>
+            </div>
+
+            <div className="mb-5 flex flex-wrap gap-3 rounded-[24px] bg-slate-50 p-5">
+              {[
+                ['all', 'All'],
+                ['published', 'Published'],
+                ['story', 'Stories'],
+                ['image', 'Images'],
+                ['video', 'Videos'],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key as PortfolioFilter)}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                    filter === key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-600 shadow-[0_10px_24px_rgba(15,23,42,0.04)]'
+                  }`}
+                >
+                  {label}
+                </button>
               ))}
             </div>
-          )}
+
+            {!filteredItems.length ? (
+              <div className="psp-empty-state">No items match this filter.</div>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-2">
+                {filteredItems.map((item) => (
+                  <article
+                    key={item.id}
+                    className="overflow-hidden rounded-[26px] border border-white/80 bg-white/95 shadow-[0_20px_40px_rgba(15,23,42,0.06)]"
+                  >
+                    <div className="relative h-[220px] bg-slate-100">
+                      {item.mediaType === 'image' ? (
+                        <img
+                          src={item.mediaUrl}
+                          alt={item.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <video
+                          src={item.mediaUrl}
+                          poster={item.thumbnailUrl || undefined}
+                          controls
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+
+                      <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+                        {item.isStory ? (
+                          <span className="rounded-full bg-fuchsia-600 px-3 py-1 text-xs font-bold text-white">
+                            Story
+                          </span>
+                        ) : null}
+
+                        {item.isStory ? (
+                          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                            {item.storyAudience === 'favorites_only'
+                              ? 'Favorites only'
+                              : 'Public'}
+                          </span>
+                        ) : null}
+
+                        {item.showPromoBadge && item.promoBadgeText ? (
+                          <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
+                            {item.promoBadgeText}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 p-5">
+                      <div>
+                        <div className="text-[22px] font-black tracking-tight text-slate-900">
+                          {item.title}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
+                          <span className="rounded-full bg-slate-100 px-3 py-1">
+                            {item.service?.name || 'Standalone'}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">
+                            {item.isPublished ? 'Published' : 'Hidden'}
+                          </span>
+                          {item.isStory ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+                              {item.storyAudience === 'favorites_only' ? (
+                                <Lock size={12} />
+                              ) : (
+                                <Globe size={12} />
+                              )}
+                              {item.storyAudience === 'favorites_only'
+                                ? 'Favorites'
+                                : 'Public'}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {item.description ? (
+                        <div className="text-sm leading-7 text-slate-600">{item.description}</div>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-4 text-sm font-semibold text-slate-600">
+                        <span className="inline-flex items-center gap-2">
+                          <Heart size={14} />
+                          {item.likesCount}
+                        </span>
+                        <span className="inline-flex items-center gap-2">
+                          <MessageCircle size={14} />
+                          {item.commentsCount}
+                        </span>
+                        {item.isStory && item.storyExpiresAt ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Sparkles size={14} />
+                            Expires: {new Date(item.storyExpiresAt).toLocaleString()}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="psp-list-card__actions">
+                        <button
+                          type="button"
+                          className="psp-button psp-button--secondary"
+                          onClick={() => handleEdit(item)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="psp-button psp-button--danger"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          className="psp-button psp-button--secondary"
+                          onClick={() =>
+                            openCommentsMediaId === item.id
+                              ? setOpenCommentsMediaId(null)
+                              : loadComments(item.id)
+                          }
+                        >
+                          {commentsLoadingId === item.id
+                            ? 'Loading comments...'
+                            : openCommentsMediaId === item.id
+                              ? 'Hide comments'
+                              : 'Open comments'}
+                        </button>
+                      </div>
+
+                      {openCommentsMediaId === item.id ? (
+                        <div className="grid gap-3">
+                          {(commentsMap[item.id] || []).length === 0 ? (
+                            <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                              No comments yet.
+                            </div>
+                          ) : (
+                            (commentsMap[item.id] || []).map((comment) => (
+                              <div key={comment.id} className="rounded-2xl bg-slate-50 px-4 py-4">
+                                <div className="font-bold text-slate-800">{comment.authorName}</div>
+                                <div className="mt-2 text-sm leading-7 text-slate-600">
+                                  {comment.body}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="psp-button psp-button--danger mt-3"
+                                  onClick={() => handleDeleteComment(comment.id, item.id)}
+                                >
+                                  Delete comment
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-      </div>
+      </section>
     </div>
   );
-};
-
-const panelStyle: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 20,
-  padding: 18,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  marginBottom: 6,
-  color: '#d6def0',
-  fontWeight: 600,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 12,
-  border: '1px solid rgba(255,255,255,0.12)',
-  background: '#0b1220',
-  color: '#fff',
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: 'none',
-  background: '#2563eb',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const secondaryButton: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: '1px solid rgba(255,255,255,0.12)',
-  background: '#172033',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const dangerButton: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: 'none',
-  background: '#7a1f1f',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const checkRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 10,
-  alignItems: 'center',
-  color: '#d6def0',
 };
 
 export default ProviderPortfolio;

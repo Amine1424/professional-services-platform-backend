@@ -10,15 +10,11 @@ import notificationRoutes from './routes/notification.routes';
 import indexRoutes from './routes/index';
 import authRoutes from './routes/auth.routes';
 import categoryRoutes from './routes/category.routes';
-import userRoutes from './routes/user.routes';
 import serviceRoutes from './routes/service.routes';
 import orderRoutes from './routes/order.routes';
-import paymentRoutes from './routes/payment.routes';
-import reviewRoutes from './routes/review.routes';
 import messageRoutes from './routes/message.routes';
 import adminRoutes from './routes/admin.routes';
 import reviewerRoutes from './routes/reviewer.routes';
-import subscriptionRoutes from './routes/subscription.routes';
 import providerRoutes from './routes/provider.routes';
 import providerMediaRoutes from './routes/provider-media.routes';
 import publicProviderRoutes from './routes/public-provider.routes';
@@ -28,6 +24,7 @@ import favoriteRoutes from './routes/favorite.routes';
 import providerReviewRoutes from './routes/provider-review.routes';
 import adminRegionRoutes from './routes/admin-region.routes';
 import adminReportRoutes from './routes/admin-report.routes';
+import reviewThreadRoutes from './routes/review-thread.routes';
 
 dotenv.config();
 
@@ -40,7 +37,6 @@ const allowedOrigins = (
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-// SECURITY
 app.use(helmet());
 
 app.use(
@@ -56,7 +52,6 @@ app.use(
   })
 );
 
-// LOGGING
 const morganFormat =
   process.env.NODE_ENV === 'production'
     ? 'combined'
@@ -64,20 +59,18 @@ const morganFormat =
 
 app.use(morgan(morganFormat));
 
-// BODY PARSERS
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// STATIC FILES
-app.use('/uploads', express.static('uploads'));
+const uploadsPath = path.resolve(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadsPath));
 
-// API ROUTES
 app.use('/api', indexRoutes);
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
-    message: '✅ Server is running',
+    message: 'Server is running',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
@@ -85,15 +78,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/users', userRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/reviews', reviewRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reviewer', reviewerRoutes);
-app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/provider-media', providerMediaRoutes);
@@ -104,8 +93,8 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/admin/regions', adminRegionRoutes);
 app.use('/api/admin/reports', adminReportRoutes);
+app.use('/api/review-threads', reviewThreadRoutes);
 
-// FRONTEND BUILD SERVING
 const frontendBuildPath = path.resolve(__dirname, '../../frontend/build');
 const frontendIndexPath = path.join(frontendBuildPath, 'index.html');
 const hasFrontendBuild = fs.existsSync(frontendIndexPath);
@@ -137,17 +126,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   res.sendFile(frontendIndexPath);
 });
 
-// 404
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     status: 'error',
-    message: '❌ Route not found',
+    message: 'Route not found',
     path: req.originalUrl,
     method: req.method,
   });
 });
 
-// GLOBAL ERROR HANDLER
 app.use(
   (
     err: Error & { status?: number; statusCode?: number },

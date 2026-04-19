@@ -1,15 +1,18 @@
 import { Request, Response, Router } from 'express';
-import { In } from 'typeorm';
+import { In, MoreThan } from 'typeorm';
 import { AppDataSource } from '../config/database';
+import { optionalAuthMiddleware } from '../middleware/auth';
+import FavoriteProvider from '../models/FavoriteProvider';
 import ServiceProvider from '../models/ServiceProvider';
 import ProviderPreference from '../models/ProviderPreference';
 import Service, { ServiceStatus } from '../models/Service';
-import ProviderMedia from '../models/ProviderMedia';
+import ProviderMedia, { ProviderMediaStoryAudience } from '../models/ProviderMedia';
 import ProviderMediaComment from '../models/ProviderMediaComment';
+import { buildProviderCoverageSummary } from '../utils/algeria';
 
 const router = Router();
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const providerId = String(req.params.id);
 
@@ -51,6 +54,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       where: {
         providerId: provider.id,
         isPublished: true,
+        isStory: false,
       },
       relations: ['service'],
       order: {
@@ -58,6 +62,52 @@ router.get('/:id', async (req: Request, res: Response) => {
         createdAt: 'DESC',
       },
     });
+
+    const canSeeFavoriteStories = req.user?.role === 'customer'
+      ? await AppDataSource.getRepository(FavoriteProvider).findOne({
+          where: {
+            userId: req.user.userId,
+            providerId: provider.id,
+          },
+        })
+      : null;
+
+    const publicStories = await mediaRepo.find({
+      where: {
+        providerId: provider.id,
+        isPublished: true,
+        isStory: true,
+        storyAudience: ProviderMediaStoryAudience.PUBLIC,
+        storyExpiresAt: MoreThan(new Date()),
+      },
+      relations: ['service'],
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    const favoriteStories = canSeeFavoriteStories
+      ? await mediaRepo.find({
+          where: {
+            providerId: provider.id,
+            isPublished: true,
+            isStory: true,
+            storyAudience: ProviderMediaStoryAudience.FAVORITES_ONLY,
+            storyExpiresAt: MoreThan(new Date()),
+          },
+          relations: ['service'],
+          order: {
+            createdAt: 'DESC',
+          },
+        })
+      : [];
+
+    const visibleStories = [...publicStories, ...favoriteStories]
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .filter(
+        (item, index, collection) =>
+          collection.findIndex((candidate) => candidate.id === item.id) === index
+      );
 
     const mediaIds = media.map((item) => item.id);
 
@@ -98,6 +148,7 @@ router.get('/:id', async (req: Request, res: Response) => {
           region: provider.region,
           wilaya: provider.wilaya,
           city: provider.city,
+          serviceCoverage: buildProviderCoverageSummary(provider),
           addressLine:
             preference?.privacyShowAddress ? provider.addressLine : null,
           yearsOfExperience: provider.yearsOfExperience,
@@ -175,6 +226,32 @@ router.get('/:id', async (req: Request, res: Response) => {
             body: comment.body,
             createdAt: comment.createdAt,
           })),
+        })),
+        stories: visibleStories.map((item) => ({
+          id: item.id,
+          providerId: item.providerId,
+          providerName: provider.companyName,
+          providerAvatarUrl: provider.avatarUrl,
+          providerLocation: [provider.city, provider.wilaya, provider.region]
+            .filter(Boolean)
+            .join(', '),
+          mediaType: item.mediaType,
+          mediaUrl: item.mediaUrl,
+          thumbnailUrl: item.thumbnailUrl,
+          title: item.title,
+          description: item.description,
+          likesCount: item.likesCount,
+          commentsCount: item.commentsCount,
+          showPromoBadge: item.showPromoBadge,
+          promoBadgeText: item.promoBadgeText,
+          storyAudience: item.storyAudience,
+          storyExpiresAt: item.storyExpiresAt,
+          service: item.service
+            ? {
+                id: item.service.id,
+                name: item.service.name,
+              }
+            : null,
         })),
       },
     });

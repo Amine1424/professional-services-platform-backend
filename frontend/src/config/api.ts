@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 const PROTECTED_PATH_PREFIXES = ['/customer', '/provider', '/admin', '/reviewer'];
+export const AUTH_REQUIRED_EVENT = 'psp:auth-required';
 
 const clearStoredSession = () => {
   localStorage.removeItem('accessToken');
@@ -15,9 +16,6 @@ const isProtectedPath = (pathname: string) =>
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 api.interceptors.request.use((config) => {
@@ -25,6 +23,13 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  } else if (!config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
+  }
+
   return config;
 });
 
@@ -37,8 +42,13 @@ api.interceptors.response.use(
       const currentPath = window.location.pathname;
       if (isProtectedPath(currentPath)) {
         const next = `${currentPath}${window.location.search}${window.location.hash}`;
-        const redirectQuery = next ? `?redirect=${encodeURIComponent(next)}` : '';
-        window.location.assign(`/login${redirectQuery}`);
+        window.dispatchEvent(
+          new CustomEvent(AUTH_REQUIRED_EVENT, {
+            detail: {
+              redirect: next,
+            },
+          })
+        );
       }
     }
     return Promise.reject(error);

@@ -1,46 +1,119 @@
 import React, { useEffect, useState } from 'react';
 import api from '../config/api';
+import { useI18n } from '../i18n';
+import '../styles/app-primitives.css';
+
+interface ReviewerProfilePayload {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  stats: {
+    totalReviewed: number;
+    reviewedToday: number;
+    approvedCount: number;
+  };
+}
 
 const ReviewerProfile: React.FC = () => {
+  const { t } = useI18n();
+  const [data, setData] = useState<ReviewerProfilePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    const run = async () => {
+    let active = true;
+
+    const load = async () => {
       try {
         const response = await api.get('/reviewer/profile');
+        if (!active) return;
         setData(response.data?.data || null);
-      } catch (error: any) {
-        setError(error.response?.data?.message || 'تعذر تحميل ملف المراجع.');
+        setError(null);
+      } catch (requestError: any) {
+        if (!active) return;
+        setError(requestError.response?.data?.message || t('Failed to load reviewer profile.'));
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
-    run();
-  }, []);
+    void load();
 
-  if (loading) return <div style={{ color: '#fff' }}>جاري التحميل...</div>;
-  if (error) return <div style={{ color: '#fff' }}>{error}</div>;
-  if (!data) return <div style={{ color: '#fff' }}>لا توجد بيانات.</div>;
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  if (loading) {
+    return (
+      <div className="psp-loading-stack">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div
+            key={`reviewer-profile-skeleton-${index}`}
+            className="psp-loading-block psp-loading-block--sm"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="psp-error-state">
+        <div className="font-bold">{t('Reviewer profile unavailable.')}</div>
+        <div>{error}</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return <div className="psp-empty-state">{t('Reviewer profile data is not available.')}</div>;
+  }
 
   return (
-    <div style={cardStyle}>
-      <div style={{ color: '#fff', fontWeight: 800, fontSize: 24 }}>
-        {data.firstName} {data.lastName}
-      </div>
-      <div style={{ color: '#cbd5e1', marginTop: 8 }}>{data.email}</div>
-      <div style={{ color: '#cbd5e1', marginTop: 8 }}>الدور: {data.role}</div>
+    <div className="psp-page-stack">
+      <section className="psp-surface">
+        <div className="psp-surface__header">
+          <div>
+            <h2>
+              {data.firstName} {data.lastName}
+            </h2>
+            <div className="psp-surface__sub">
+              {data.email} • {t(data.role)} •{' '}
+              {data.isActive ? t('Active account') : t('Inactive account')}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="psp-stat-grid">
+        {[
+          [
+            t('Total reviewed'),
+            data.stats.totalReviewed,
+            t('All moderation decisions stored for this reviewer.'),
+          ],
+          [
+            t('Reviewed today'),
+            data.stats.reviewedToday,
+            t('Decisions created since the start of today.'),
+          ],
+          [t('Approved'), data.stats.approvedCount, t('Accounts approved by this reviewer so far.')],
+        ].map(([label, value, caption]) => (
+          <article key={label as string} className="psp-stat-card">
+            <div className="psp-stat-card__label">{label}</div>
+            <div className="psp-stat-card__value">{value}</div>
+            <div className="psp-stat-card__caption">{caption}</div>
+          </article>
+        ))}
+      </section>
     </div>
   );
-};
-
-const cardStyle: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 16,
-  padding: 16,
 };
 
 export default ReviewerProfile;

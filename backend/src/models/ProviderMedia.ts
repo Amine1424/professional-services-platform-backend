@@ -15,6 +15,11 @@ export enum ProviderMediaType {
   VIDEO = 'video',
 }
 
+export enum ProviderMediaStoryAudience {
+  PUBLIC = 'public',
+  FAVORITES_ONLY = 'favorites_only',
+}
+
 @Entity('provider_media')
 export class ProviderMedia {
   @PrimaryGeneratedColumn('uuid')
@@ -79,6 +84,20 @@ export class ProviderMedia {
 
   @Column({ name: 'comments_count', type: 'int', default: 0 })
   commentsCount!: number;
+
+  @Column({ name: 'is_story', type: 'boolean', default: false })
+  isStory!: boolean;
+
+  @Column({
+    name: 'story_audience',
+    type: 'varchar',
+    length: 40,
+    default: ProviderMediaStoryAudience.PUBLIC,
+  })
+  storyAudience!: ProviderMediaStoryAudience;
+
+  @Column({ name: 'story_expires_at', type: 'timestamp', nullable: true })
+  storyExpiresAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

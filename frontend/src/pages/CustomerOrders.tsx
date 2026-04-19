@@ -1,17 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import {
+  CalendarDays,
+  CheckCircle2,
+  CircleDashed,
+  ClipboardList,
+  MessageSquare,
+  Wallet,
+  XCircle,
+} from 'lucide-react';
 import RequestStatusBadge from '../components/requests/RequestStatusBadge';
 import api from '../config/api';
+import { useI18n } from '../i18n';
 import {
   formatMoney,
   formatMoneyRange,
   formatRequestDate,
+  getRequestStatusMeta,
   getRequestsCountByFilter,
   matchesRequestFilter,
   RequestFilterKey,
   REQUEST_FILTERS,
 } from '../lib/service-request';
+import '../styles/app-primitives.css';
 import '../styles/service-request.css';
 
 interface CustomerOrderItem {
@@ -41,14 +53,54 @@ interface CustomerOrderItem {
   } | null;
 }
 
-export const CustomerOrders: React.FC = () => {
+const REQUEST_FLOW = [
+  { key: 'new', label: 'Created' },
+  { key: 'reviewed', label: 'Reviewed' },
+  { key: 'quoted', label: 'Quoted' },
+  { key: 'accepted', label: 'Accepted' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'completed', label: 'Completed' },
+];
+
+const getFlowState = (currentStatus?: string | null, stepKey?: string) => {
+  if (!currentStatus || !stepKey) return 'upcoming';
+
+  if (currentStatus === 'cancelled' || currentStatus === 'rejected') {
+    const currentIndex = REQUEST_FLOW.findIndex((item) => item.key === 'quoted');
+    const stepIndex = REQUEST_FLOW.findIndex((item) => item.key === stepKey);
+
+    if (stepIndex !== -1 && stepIndex <= currentIndex) {
+      return 'done';
+    }
+
+    return 'upcoming';
+  }
+
+  const currentIndex = REQUEST_FLOW.findIndex((item) => item.key === currentStatus);
+  const stepIndex = REQUEST_FLOW.findIndex((item) => item.key === stepKey);
+
+  if (currentIndex === -1 || stepIndex === -1) return 'upcoming';
+  if (stepIndex < currentIndex) return 'done';
+  if (stepIndex === currentIndex) return 'current';
+  return 'upcoming';
+};
+
+const fallbackAvatar =
+  'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
+
+const CustomerOrders: React.FC = () => {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestIdParam = searchParams.get('requestId');
+  const filterParam = searchParams.get('tab');
+  const initialFilter = REQUEST_FILTERS.some((item) => item.key === filterParam)
+    ? (filterParam as RequestFilterKey)
+    : 'all';
 
   const [items, setItems] = useState<CustomerOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<RequestFilterKey>('all');
+  const [filter, setFilter] = useState<RequestFilterKey>(initialFilter);
   const [selectedId, setSelectedId] = useState<string | null>(requestIdParam);
   const [decisionNote, setDecisionNote] = useState('');
 
@@ -69,36 +121,40 @@ export const CustomerOrders: React.FC = () => {
       });
     } catch (error) {
       console.error(error);
-      toast.error('فشل تحميل الطلبات');
+      toast.error(t('Failed to load your requests.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load(requestIdParam);
   }, [load, requestIdParam]);
 
   useEffect(() => {
-    if (!requestIdParam) {
-      return;
-    }
-
+    if (!requestIdParam) return;
     setSelectedId(requestIdParam);
   }, [requestIdParam]);
 
   useEffect(() => {
-    if (!selectedId) {
+    if (!REQUEST_FILTERS.some((item) => item.key === filterParam)) {
       return;
     }
 
+    setFilter(filterParam as RequestFilterKey);
+  }, [filterParam]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('requestId', selectedId);
+    nextParams.set('tab', filter);
 
     if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams, { replace: true });
     }
-  }, [searchParams, selectedId, setSearchParams]);
+  }, [filter, searchParams, selectedId, setSearchParams]);
 
   const filteredItems = useMemo(
     () => items.filter((item) => matchesRequestFilter(item.status, filter)),
@@ -106,10 +162,7 @@ export const CustomerOrders: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!filteredItems.length) {
-      return;
-    }
-
+    if (!filteredItems.length) return;
     if (!selectedId || !filteredItems.some((item) => item.id === selectedId)) {
       setSelectedId(filteredItems[0].id);
     }
@@ -120,6 +173,8 @@ export const CustomerOrders: React.FC = () => {
     [items, selectedId]
   );
 
+  const selectedStatusMeta = getRequestStatusMeta(selected?.status);
+
   useEffect(() => {
     setDecisionNote(selected?.customerNote || '');
   }, [selected]);
@@ -127,9 +182,7 @@ export const CustomerOrders: React.FC = () => {
   const updateCustomerDecision = async (
     status: 'accepted' | 'rejected' | 'cancelled'
   ) => {
-    if (!selected) {
-      return;
-    }
+    if (!selected) return;
 
     try {
       setActionLoadingId(selected.id);
@@ -137,10 +190,10 @@ export const CustomerOrders: React.FC = () => {
         status,
         customerNote: decisionNote.trim() || null,
       });
-      toast.success('تم تحديث الطلب');
+      toast.success(t('Request updated.'));
       await load(selected.id);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل تحديث الطلب');
+      toast.error(error.response?.data?.message || t('Failed to update the request.'));
     } finally {
       setActionLoadingId(null);
     }
@@ -158,262 +211,444 @@ export const CustomerOrders: React.FC = () => {
 
   const summaryCards = [
     {
-      label: 'إجمالي الطلبات',
+      label: 'All requests',
       value: items.length,
-      caption: 'كل الطلبات والـ quotes المرتبطة بحسابك.',
+      caption: 'Every service request and quote connected to your account.',
+      icon: ClipboardList,
     },
     {
-      label: 'العروض المرسلة',
+      label: 'Quotes received',
       value: getRequestsCountByFilter(
         items.map((item) => item.status),
         'quoted'
       ),
-      caption: 'طلبات تحتاج قراراً مباشراً منك.',
+      caption: 'Requests currently waiting for your approval or rejection.',
+      icon: Wallet,
     },
     {
-      label: 'الطلبات النشطة',
+      label: 'Active requests',
       value: getRequestsCountByFilter(
         items.map((item) => item.status),
         'active'
       ),
-      caption: 'طلبات مفتوحة أو قيد التنفيذ حالياً.',
+      caption: 'Requests currently open or already moving into execution.',
+      icon: CheckCircle2,
     },
     {
-      label: 'الطلبات المغلقة',
+      label: 'Closed requests',
       value: getRequestsCountByFilter(
         items.map((item) => item.status),
         'closed'
       ),
-      caption: 'طلبات مكتملة أو ملغاة أو مرفوضة.',
+      caption: 'Completed, cancelled, or rejected requests.',
+      icon: XCircle,
     },
   ];
 
   return (
-    <div className="psp-request-page">
-      <section className="psp-request-summary-grid">
-        {summaryCards.map((item) => (
-          <div key={item.label} className="psp-request-summary-card">
-            <div className="psp-request-summary-card__label">{item.label}</div>
-            <div className="psp-request-summary-card__value">{item.value}</div>
-            <div className="psp-request-summary-card__caption">{item.caption}</div>
+    <div className="psp-page-stack">
+      <section className="psp-surface">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              {t('Request workspace')}
+            </div>
+            <h2 className="mt-2 text-[30px] font-black tracking-tight text-slate-900">
+              {t('Requests, quotes, and next decisions')}
+            </h2>
+            <div className="mt-3 max-w-[760px] text-[15px] leading-8 text-slate-600">
+              {t(
+                'Follow every request from first contact to quote, approval, execution, and closure without leaving the customer workspace.'
+              )}
+            </div>
           </div>
-        ))}
-      </section>
 
-      <div className="psp-request-workspace">
-        <section className="psp-request-panel">
-          <div className="psp-request-panel__header">
-            <div>
-              <h2>طلباتك</h2>
-              <div className="psp-request-panel__sub">
-                راقب كل quote أو طلب خدمة من أول رسالة حتى القرار النهائي.
+          <div className="grid min-w-[280px] gap-3 sm:grid-cols-2">
+            <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                {t('Waiting for you')}
+              </div>
+              <div className="mt-2 text-[24px] font-black text-slate-900">
+                {getRequestsCountByFilter(
+                  items.map((item) => item.status),
+                  'quoted'
+                )}
               </div>
             </div>
-            <RequestStatusBadge status={selected?.status} />
+            <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                {t('Linked conversations')}
+              </div>
+              <div className="mt-2 text-[24px] font-black text-slate-900">
+                {items.filter((item) => item.conversationId).length}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="psp-stat-grid">
+        {summaryCards.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article key={item.label} className="psp-stat-card">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <Icon size={18} />
+              </div>
+              <div className="psp-stat-card__label mt-4">{t(item.label)}</div>
+              <div className="psp-stat-card__value">{item.value}</div>
+              <div className="psp-stat-card__caption">{t(item.caption)}</div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="psp-surface xl:sticky xl:top-6 xl:self-start">
+          <div className="psp-surface__header">
+            <div>
+              <h2>Your requests</h2>
+              <div className="psp-surface__sub">
+                {t('Keep one focused shortlist of all request workflows.')}
+              </div>
+            </div>
           </div>
 
-          <div className="psp-request-filters">
+          <div className="psp-control-bar mb-5">
             {REQUEST_FILTERS.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setFilter(item.key)}
-                className={`psp-request-filter ${
-                  filter === item.key ? 'psp-request-filter--active' : ''
-                }`}
+                className={`psp-control-pill ${filter === item.key ? 'psp-control-pill--active' : ''}`}
+                aria-pressed={filter === item.key}
               >
-                {item.label}
+                {t(item.label)}
               </button>
             ))}
           </div>
 
           {loading ? (
-            <div className="psp-request-list-empty">جارٍ تحميل الطلبات...</div>
+            <div className="psp-empty-state">{t('Loading requests...')}</div>
           ) : !filteredItems.length ? (
-            <div className="psp-request-list-empty">
-              لا توجد طلبات في هذا التصنيف حالياً.
+            <div className="psp-empty-state">{t('No requests match this filter right now.')}</div>
+          ) : (
+            <div className="grid gap-4">
+              {filteredItems.map((item) => {
+                const isActive = selectedId === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    className={`w-full rounded-[24px] border px-4 py-4 text-left transition ${
+                      isActive
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-black text-slate-900">
+                          {item.subject || item.service?.name || 'Service request'}
+                        </div>
+                        <div className="mt-1 truncate text-xs text-slate-500">
+                          {item.provider.companyName}
+                        </div>
+                      </div>
+                      <RequestStatusBadge status={item.status} />
+                    </div>
+
+                    <div className="mt-3 text-sm leading-6 text-slate-600">
+                      {item.description}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                      <span>{formatRequestDate(item.updatedAt)}</span>
+                      <span>
+                        {item.quotedPrice
+                          ? formatMoney(item.quotedPrice, item.currencyCode)
+                          : formatMoneyRange(item.budgetMin, item.budgetMax, item.currencyCode)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        <section className="psp-page-stack">
+          {!selected ? (
+            <div className="psp-empty-state">
+              {t('Select a request from the list to review the full detail and next actions.')}
             </div>
           ) : (
-            <div className="psp-request-list">
-              {filteredItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedId(item.id)}
-                  className={`psp-request-list-card ${
-                    selectedId === item.id ? 'psp-request-list-card--active' : ''
-                  }`}
-                >
-                  <div className="psp-request-list-card__top">
-                    <strong>{item.subject || item.service?.name || 'طلب خدمة'}</strong>
-                    <span className="psp-request-list-card__time">
-                      {formatRequestDate(item.createdAt)}
-                    </span>
+            <>
+              <article className="psp-surface">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="flex items-start gap-4">
+                    <img
+                      src={selected.provider.avatarUrl || fallbackAvatar}
+                      alt={selected.provider.companyName}
+                      className="h-16 w-16 rounded-[22px] object-cover"
+                    />
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h2 className="text-[28px] font-black tracking-tight text-slate-900">
+                          {selected.subject || selected.service?.name || 'Service request'}
+                        </h2>
+                        <RequestStatusBadge status={selected.status} />
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                        <span>{selected.provider.companyName}</span>
+                        <span>•</span>
+                        <span>{formatRequestDate(selected.updatedAt)}</span>
+                        {selected.provider.isVerified ? (
+                          <>
+                            <span>•</span>
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                              <CheckCircle2 size={14} />
+                              Verified
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="psp-request-list-card__sub">
-                    {item.provider.companyName} • {item.service?.name || 'بدون خدمة محددة'}
+                  <button
+                    type="button"
+                    onClick={() => goToConversation(selected)}
+                    className="psp-button psp-button--secondary"
+                  >
+                    <MessageSquare size={16} />
+                    {t('Open conversation')}
+                  </button>
+                </div>
+              </article>
+
+              <section className="grid gap-6 lg:grid-cols-2 2xl:grid-cols-4">
+                <article className="psp-stat-card">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <Wallet size={18} />
                   </div>
-
-                  <div className="psp-request-list-card__body">{item.description}</div>
-
-                  <div className="psp-request-action-row" style={{ marginTop: 12 }}>
-                    <RequestStatusBadge status={item.status} />
-                    {item.quotedPrice ? (
-                      <span className="psp-request-muted">
-                        {formatMoney(item.quotedPrice, item.currencyCode)}
-                      </span>
-                    ) : (
-                      <span className="psp-request-muted">
-                        {formatMoneyRange(item.budgetMin, item.budgetMax, item.currencyCode)}
-                      </span>
+                  <div className="psp-stat-card__label mt-4">{t('Expected budget')}</div>
+                  <div className="text-[20px] font-black tracking-tight text-slate-900">
+                    {formatMoneyRange(
+                      selected.budgetMin,
+                      selected.budgetMax,
+                      selected.currencyCode
                     )}
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+                </article>
 
-        <section className="psp-request-panel">
-          {!selected ? (
-            <div className="psp-request-detail-empty">
-              اختر طلباً من القائمة لعرض التفاصيل واتخاذ القرار.
-            </div>
-          ) : (
-            <div className="psp-request-detail">
-              <div className="psp-request-detail-header">
-                <div>
-                  <h2 className="psp-request-detail-title">
-                    {selected.subject || selected.service?.name || 'طلب خدمة'}
-                  </h2>
-                  <div className="psp-request-detail-meta">
-                    <span>{selected.provider.companyName}</span>
-                    <span>•</span>
-                    <span>{formatRequestDate(selected.updatedAt)}</span>
-                    {selected.provider.isVerified ? (
-                      <>
-                        <span>•</span>
-                        <span>Verified</span>
-                      </>
+                <article className="psp-stat-card">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <ClipboardList size={18} />
+                  </div>
+                  <div className="psp-stat-card__label mt-4">{t('Current quote')}</div>
+                  <div className="text-[20px] font-black tracking-tight text-slate-900">
+                    {selected.quotedPrice
+                      ? formatMoney(selected.quotedPrice, selected.currencyCode)
+                      : t('No quote yet')}
+                  </div>
+                </article>
+
+                <article className="psp-stat-card">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <CalendarDays size={18} />
+                  </div>
+                  <div className="psp-stat-card__label mt-4">{t('Preferred date')}</div>
+                  <div className="text-[20px] font-black tracking-tight text-slate-900">
+                    {formatRequestDate(selected.preferredDate)}
+                  </div>
+                </article>
+
+                <article className="psp-stat-card">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <div className="psp-stat-card__label mt-4">{t('Next step')}</div>
+                  <div className="text-[16px] font-black tracking-tight text-slate-900">
+                    {t(selectedStatusMeta.label)}
+                  </div>
+                </article>
+              </section>
+
+              <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+                <article className="psp-surface">
+                  <div className="psp-surface__header">
+                    <div>
+                      <h2>Request summary</h2>
+                      <div className="psp-surface__sub">
+                        {t('Original request details, provider response, and what happens next.')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5">
+                    <div className="rounded-[24px] bg-slate-50 p-5">
+                      <div className="text-sm font-black text-slate-900">{t('Description')}</div>
+                      <div className="mt-3 text-[15px] leading-8 text-slate-700">
+                        {selected.description}
+                      </div>
+                    </div>
+
+                    {selected.providerResponse ? (
+                      <div className="rounded-[24px] border border-blue-100 bg-blue-50/70 p-5">
+                        <div className="text-sm font-black text-slate-900">{t('Provider response')}</div>
+                        <div className="mt-3 text-[15px] leading-8 text-slate-700">
+                          {selected.providerResponse}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div className="text-sm font-black text-slate-900">{t('What should happen now')}</div>
+                      <div className="mt-3 text-[15px] leading-8 text-slate-700">
+                        {t(selectedStatusMeta.nextAction)}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="psp-surface">
+                  <div className="psp-surface__header">
+                    <div>
+                      <h2>Lifecycle</h2>
+                      <div className="psp-surface__sub">
+                        {t('A clean visual view of the current stage.')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {REQUEST_FLOW.map((step) => {
+                      const state = getFlowState(selected.status, step.key);
+
+                      return (
+                        <div
+                          key={step.key}
+                          className={`flex items-center gap-4 rounded-[22px] px-4 py-4 ${
+                            state === 'done'
+                              ? 'bg-emerald-50'
+                              : state === 'current'
+                                ? 'bg-blue-50'
+                                : 'bg-slate-50'
+                          }`}
+                        >
+                          <div
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${
+                              state === 'done'
+                                ? 'bg-emerald-600 text-white'
+                                : state === 'current'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-200 text-slate-500'
+                            }`}
+                          >
+                            {state === 'done' ? (
+                              <CheckCircle2 size={18} />
+                            ) : state === 'current' ? (
+                              <CircleDashed size={18} />
+                            ) : (
+                              <CircleDashed size={18} />
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="text-sm font-black text-slate-900">{t(step.label)}</div>
+                            <div className="mt-1 text-sm text-slate-600">
+                              {t(getRequestStatusMeta(step.key).nextAction)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {selected.status === 'rejected' ? (
+                      <div className="rounded-[22px] bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
+                        {t('This request was rejected.')}
+                      </div>
+                    ) : null}
+
+                    {selected.status === 'cancelled' ? (
+                      <div className="rounded-[22px] bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
+                        {t('This request was cancelled.')}
+                      </div>
                     ) : null}
                   </div>
-                </div>
-
-                <RequestStatusBadge status={selected.status} />
+                </article>
               </div>
 
-              <div className="psp-request-detail-card">
-                <h3>ملخص الطلب</h3>
-                <div className="psp-request-detail-grid">
-                  <div className="psp-request-detail-item">
-                    <div className="psp-request-detail-item__label">الميزانية المتوقعة</div>
-                    <div className="psp-request-detail-item__value">
-                      {formatMoneyRange(
-                        selected.budgetMin,
-                        selected.budgetMax,
-                        selected.currencyCode
-                      )}
+              <article className="psp-surface">
+                <div className="psp-surface__header">
+                  <div>
+                      <h2>Your notes and decisions</h2>
+                      <div className="psp-surface__sub">
+                        {t('Keep a note, then take the right customer-side action.')}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="psp-request-detail-item">
-                    <div className="psp-request-detail-item__label">موعد مفضل</div>
-                    <div className="psp-request-detail-item__value">
-                      {formatRequestDate(selected.preferredDate)}
-                    </div>
-                  </div>
+                <textarea
+                  value={decisionNote}
+                  onChange={(event) => setDecisionNote(event.target.value)}
+                  placeholder={t('Add a note before accepting, rejecting, or cancelling this request...')}
+                  className="psp-textarea"
+                />
 
-                  <div className="psp-request-detail-item">
-                    <div className="psp-request-detail-item__label">الخدمة</div>
-                    <div className="psp-request-detail-item__value">
-                      {selected.service?.name || 'بدون خدمة محددة'}
-                    </div>
-                  </div>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => goToConversation(selected)}
+                    className="psp-button psp-button--secondary"
+                  >
+                    <MessageSquare size={16} />
+                    {t('Open conversation')}
+                  </button>
 
-                  <div className="psp-request-detail-item">
-                    <div className="psp-request-detail-item__label">العرض الحالي</div>
-                    <div className="psp-request-detail-item__value">
-                      {selected.quotedPrice
-                        ? formatMoney(selected.quotedPrice, selected.currencyCode)
-                        : 'لم يصل عرض سعر بعد'}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  {selected.status === 'quoted' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void updateCustomerDecision('accepted')}
+                        disabled={actionLoadingId === selected.id}
+                        className="psp-button psp-button--primary"
+                      >
+                        {t('Accept quote')}
+                      </button>
 
-              <div className="psp-request-detail-card">
-                <h3>الوصف</h3>
-                <div className="psp-request-description">{selected.description}</div>
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => void updateCustomerDecision('rejected')}
+                        disabled={actionLoadingId === selected.id}
+                        className="psp-button psp-button--danger"
+                      >
+                        {t('Reject quote')}
+                      </button>
+                    </>
+                  ) : null}
 
-              {selected.providerResponse ? (
-                <div className="psp-request-detail-card">
-                  <h3>رد المزود</h3>
-                  <div className="psp-request-note-box">{selected.providerResponse}</div>
-                </div>
-              ) : null}
-
-              <div className="psp-request-activity-card">
-                <h3>ملاحظتك وقراراتك</h3>
-                <div className="psp-request-form-grid">
-                  <textarea
-                    value={decisionNote}
-                    onChange={(event) => setDecisionNote(event.target.value)}
-                    placeholder="أضف ملاحظة للمزود قبل قبول العرض أو رفضه أو إلغاء الطلب..."
-                    className="psp-request-textarea"
-                  />
-
-                  <div className="psp-request-action-row">
+                  {['new', 'reviewed', 'quoted'].includes(selected.status) ? (
                     <button
                       type="button"
-                      onClick={() => goToConversation(selected)}
-                      className="psp-request-button psp-request-button--ghost"
+                      onClick={() => void updateCustomerDecision('cancelled')}
+                      disabled={actionLoadingId === selected.id}
+                      className="psp-button psp-button--danger"
                     >
-                      فتح المحادثة
+                      {t('Cancel request')}
                     </button>
-
-                    <div className="psp-request-inline-grid">
-                      {selected.status === 'quoted' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => void updateCustomerDecision('accepted')}
-                            disabled={actionLoadingId === selected.id}
-                            className="psp-request-button psp-request-button--primary"
-                          >
-                            قبول العرض
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => void updateCustomerDecision('rejected')}
-                            disabled={actionLoadingId === selected.id}
-                            className="psp-request-button psp-request-button--danger"
-                          >
-                            رفض العرض
-                          </button>
-                        </>
-                      ) : null}
-
-                      {['new', 'reviewed', 'quoted'].includes(selected.status) ? (
-                        <button
-                          type="button"
-                          onClick={() => void updateCustomerDecision('cancelled')}
-                          disabled={actionLoadingId === selected.id}
-                          className="psp-request-button psp-request-button--danger"
-                        >
-                          إلغاء الطلب
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
-              </div>
-            </div>
+              </article>
+            </>
           )}
         </section>
-      </div>
+      </section>
     </div>
   );
 };

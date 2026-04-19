@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { MessageSquareText, Star, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../config/api';
-import { Link } from 'react-router-dom';
+import '../styles/app-primitives.css';
 
 interface ReviewItem {
   id: string;
@@ -16,108 +18,280 @@ interface ReviewItem {
   } | null;
 }
 
-export const CustomerReviews: React.FC = () => {
+const fallbackAvatar =
+  'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
+
+const CustomerReviews: React.FC = () => {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'with_comment' | 'high_rating'>('all');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const response = await api.get('/provider-reviews/me');
       setItems(response.data?.data || []);
-    } catch (error) {
-      console.error(error);
+      setError(null);
+    } catch (requestError: any) {
       setItems([]);
+      setError(requestError.response?.data?.message || 'Failed to load your reviews.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    load();
   }, []);
 
-  const remove = async (id: string) => {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const removeReview = async (id: string) => {
     try {
+      setDeletingId(id);
       await api.delete(`/provider-reviews/${id}`);
-      toast.success('تم حذف التقييم');
-      load();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'فشل حذف التقييم');
+      setItems((current) => current.filter((review) => review.id !== id));
+      toast.success('Review deleted.');
+    } catch (requestError: any) {
+      toast.error(requestError.response?.data?.message || 'Failed to delete review.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  return (
-    <div style={panelStyle}>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>
-        كل تقييماتي السابقة
+  const stats = useMemo(() => {
+    const average =
+      items.length > 0
+        ? (
+            items.reduce((sum, review) => sum + Number(review.rating || 0), 0) / items.length
+          ).toFixed(1)
+        : '0.0';
+
+    return [
+      {
+        label: 'Published reviews',
+        value: String(items.length),
+        caption: 'Reviews you have written across provider profiles.',
+      },
+      {
+        label: 'Average rating given',
+        value: average,
+        caption: 'A simple view of how demanding your public feedback has been.',
+      },
+      {
+        label: 'With written comments',
+        value: String(items.filter((item) => Boolean(item.comment?.trim())).length),
+        caption: 'Reviews that include context beyond the star rating.',
+      },
+    ];
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (filter === 'with_comment') {
+      return items.filter((item) => Boolean(item.comment?.trim()));
+    }
+
+    if (filter === 'high_rating') {
+      return items.filter((item) => Number(item.rating) >= 4);
+    }
+
+    return items;
+  }, [filter, items]);
+
+  const ratingDistribution = useMemo(() => {
+    return [5, 4, 3, 2, 1].map((rating) => ({
+      rating,
+      count: items.filter((item) => Number(item.rating) === rating).length,
+    }));
+  }, [items]);
+
+  if (loading) {
+    return (
+      <div className="psp-page-stack">
+        <div className="h-[220px] animate-pulse rounded-[30px] bg-white/80" />
+        <div className="h-[320px] animate-pulse rounded-[28px] bg-white/80" />
       </div>
+    );
+  }
 
-      {loading ? (
-        <div style={bodyText}>جاري تحميل التقييمات...</div>
-      ) : !items.length ? (
-        <div style={bodyText}>لم تقم بكتابة أي تقييم بعد.</div>
-      ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {items.map((review) => (
-            <div key={review.id} style={reviewCard}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <Link to={`/providers/${review.providerId}`} style={providerLink}>
-                    {review.provider?.companyName || 'Provider'}
-                  </Link>
-                  <div style={{ color: '#dbe3f2', marginTop: 8 }}>
-                    {review.rating} ⭐
-                  </div>
-                  <div style={{ color: '#c9d3e4', marginTop: 8, lineHeight: 1.7 }}>
-                    {review.comment || 'بدون تعليق'}
-                  </div>
-                </div>
+  if (error) {
+    return (
+      <div className="psp-error-state">
+        <div className="font-bold">Reviews unavailable.</div>
+        <div>{error}</div>
+      </div>
+    );
+  }
 
-                <button onClick={() => remove(review.id)} style={dangerButton}>
-                  حذف
-                </button>
-              </div>
+  return (
+    <div className="psp-page-stack">
+      <section className="overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#0f172a,#1d4ed8_55%,#60a5fa)] p-6 text-white shadow-[0_26px_55px_rgba(15,23,42,0.14)]">
+        <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold tracking-[0.14em] text-white/90">
+              <MessageSquareText size={14} />
+              Review history
             </div>
-          ))}
+            <h2 className="mt-5 text-[34px] font-black tracking-tight md:text-[42px]">
+              Manage the feedback you have already published
+            </h2>
+            <p className="mt-4 max-w-[620px] text-[15px] leading-8 text-white/82">
+              Reviews shape public trust and discovery ranking. From here you can reopen the provider profile or delete feedback that is no longer accurate.
+            </p>
+          </div>
+
+          <div className="grid gap-4 rounded-[28px] bg-white/10 p-4 backdrop-blur">
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                ['Total reviews', String(items.length)],
+                ['Providers reviewed', String(new Set(items.map((item) => item.providerId)).size)],
+                ['Ratings given', items.length ? 'Active' : 'None yet'],
+                ['Delete control', 'Available'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-[22px] bg-white/10 p-4">
+                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">{label}</div>
+                  <div className="mt-2 text-[24px] font-black">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      )}
+      </section>
+
+      <section className="psp-stat-grid">
+        {stats.map((item) => (
+          <article key={item.label} className="psp-stat-card">
+            <div className="psp-stat-card__label">{item.label}</div>
+            <div className="psp-stat-card__value">{item.value}</div>
+            <div className="psp-stat-card__caption">{item.caption}</div>
+          </article>
+        ))}
+      </section>
+
+      <section className="psp-surface">
+        <div className="psp-surface__header">
+          <div>
+            <h2>Your published reviews</h2>
+            <div className="psp-surface__sub">
+              Open the provider profile to add new feedback in context, or remove an outdated review directly from here.
+            </div>
+          </div>
+          <Link to="/customer/explore" className="psp-button psp-button--primary">
+            Explore providers
+          </Link>
+        </div>
+
+        <div className="mb-5 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+          <div className="rounded-[24px] bg-slate-50 p-5">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              Rating distribution
+            </div>
+            <div className="mt-4 grid gap-3">
+              {ratingDistribution.map((item) => (
+                <div key={item.rating} className="flex items-center justify-between gap-4 rounded-[18px] bg-white px-4 py-3">
+                  <div className="inline-flex items-center gap-2 font-bold text-slate-700">
+                    <Star size={14} fill="currentColor" className="text-amber-500" />
+                    {item.rating} stars
+                  </div>
+                  <div className="text-sm font-semibold text-slate-500">{item.count} reviews</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 rounded-[24px] bg-slate-50 p-5">
+            {[
+              ['all', 'All reviews'],
+              ['with_comment', 'With comments'],
+              ['high_rating', '4 stars and above'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key as 'all' | 'with_comment' | 'high_rating')}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  filter === key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-slate-600 shadow-[0_10px_24px_rgba(15,23,42,0.04)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!items.length ? (
+          <div className="psp-empty-state">
+            <div className="font-bold">You have not published any reviews yet.</div>
+            <div className="mt-2">Open a provider profile from Explore when you want to leave public feedback.</div>
+            <Link to="/customer/explore" className="psp-button psp-button--primary mt-5">
+              Open Explore
+            </Link>
+          </div>
+        ) : !filteredItems.length ? (
+          <div className="psp-empty-state">
+            <div className="font-bold">No reviews match this filter.</div>
+            <div className="mt-2">Switch filters to inspect the rest of your published feedback.</div>
+          </div>
+        ) : (
+          <div className="psp-list">
+            {filteredItems.map((review) => {
+              const providerName = review.provider?.companyName || 'Provider';
+
+              return (
+                <article key={review.id} className="psp-list-card">
+                  <div className="psp-list-card__row">
+                    <div className="flex gap-4">
+                      <div className="h-16 w-16 overflow-hidden rounded-[20px] bg-slate-100">
+                        <img
+                          src={review.provider?.avatarUrl || fallbackAvatar}
+                          alt={providerName}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="psp-list-card__title">{providerName}</h3>
+                        <div className="psp-list-card__meta">
+                          {new Date(review.createdAt).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </div>
+                        <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
+                          <Star size={15} fill="currentColor" />
+                          {review.rating} / 5
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="psp-list-card__actions">
+                      <Link to={`/providers/${review.providerId}`} className="psp-button psp-button--secondary">
+                        Open provider
+                      </Link>
+                      <button
+                        type="button"
+                        className="psp-button psp-button--danger"
+                        disabled={deletingId === review.id}
+                        onClick={() => removeReview(review.id)}
+                      >
+                        <Trash2 size={16} />
+                        {deletingId === review.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[20px] bg-slate-50 p-4 text-sm leading-8 text-slate-600">
+                    {review.comment?.trim() || 'No written comment was included with this review.'}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
-};
-
-const panelStyle: React.CSSProperties = {
-  background: '#111827',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 20,
-  padding: 18,
-};
-
-const bodyText: React.CSSProperties = {
-  color: '#cfd8e6',
-  lineHeight: 1.8,
-};
-
-const reviewCard: React.CSSProperties = {
-  background: '#0f1728',
-  border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 16,
-  padding: 14,
-};
-
-const providerLink: React.CSSProperties = {
-  color: '#7cc4ff',
-  textDecoration: 'none',
-  fontWeight: 800,
-};
-
-const dangerButton: React.CSSProperties = {
-  padding: '10px 14px',
-  borderRadius: 12,
-  border: 'none',
-  background: '#7a1f1f',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
 };
 
 export default CustomerReviews;

@@ -1,13 +1,14 @@
 import { Request, Response, Router } from 'express';
 import { AppDataSource } from '../config/database';
 import { authMiddleware, authorizeRole } from '../middleware/auth';
+import { NotificationType } from '../models/AppNotification';
 import Conversation, { ConversationStatus } from '../models/Conversation';
 import ConversationMessage from '../models/ConversationMessage';
 import Service from '../models/Service';
 import ServiceProvider from '../models/ServiceProvider';
 import ServiceRequest, { ServiceRequestStatus } from '../models/ServiceRequest';
 import { createNotification } from '../services/notificationService';
-import { NotificationType } from '../models/AppNotification';
+
 const router = Router();
 
 const getProviderForUser = async (userId: string) => {
@@ -36,18 +37,18 @@ const openOrCreateConversation = async (
     throw new Error('Provider not found');
   }
 
-  const qb = conversationRepo
+  const query = conversationRepo
     .createQueryBuilder('conversation')
     .where('conversation.customer_user_id = :customerUserId', { customerUserId })
     .andWhere('conversation.provider_id = :providerId', { providerId });
 
   if (serviceId) {
-    qb.andWhere('conversation.service_id = :serviceId', { serviceId });
+    query.andWhere('conversation.service_id = :serviceId', { serviceId });
   } else {
-    qb.andWhere('conversation.service_id IS NULL');
+    query.andWhere('conversation.service_id IS NULL');
   }
 
-  let conversation = await qb.getOne();
+  let conversation = await query.getOne();
 
   if (!conversation) {
     let subject: string | null = provider.companyName;
@@ -76,7 +77,6 @@ const openOrCreateConversation = async (
 
   if (initialMessage && String(initialMessage).trim()) {
     const messageBody = String(initialMessage).trim();
-
     const message = messageRepo.create({
       conversationId: conversation.id,
       senderUserId: customerUserId,
@@ -97,7 +97,7 @@ const openOrCreateConversation = async (
   return conversation;
 };
 
-const appendSystemLikeMessage = async (
+const appendTimelineMessage = async (
   conversationId: string,
   senderUserId: string,
   senderRole: 'customer' | 'service_provider',
@@ -120,157 +120,239 @@ const appendSystemLikeMessage = async (
     where: { id: conversationId },
   });
 
-  if (conversation) {
-    conversation.lastMessagePreview = body.slice(0, 500);
-    conversation.lastMessageAt = new Date();
+  if (!conversation) {
+    return;
+  }
 
-    if (senderRole === 'customer') {
-      conversation.lastReadCustomerAt = new Date();
-    } else {
-      conversation.lastReadProviderAt = new Date();
-    }
+  conversation.lastMessagePreview = body.slice(0, 500);
+  conversation.lastMessageAt = new Date();
 
-    await conversationRepo.save(conversation);
+  if (senderRole === 'customer') {
+    conversation.lastReadCustomerAt = new Date();
+  } else {
+    conversation.lastReadProviderAt = new Date();
+  }
+
+  await conversationRepo.save(conversation);
+};
+
+const safeAppendTimelineMessage = async (
+  conversationId: string,
+  senderUserId: string,
+  senderRole: 'customer' | 'service_provider',
+  body: string
+) => {
+  try {
+    await appendTimelineMessage(conversationId, senderUserId, senderRole, body);
+  } catch (error) {
+    console.error('Failed to append request timeline message', error);
   }
 };
 
-router.post(
-  '/',
-  authMiddleware,
-  authorizeRole('customer'),
-  async (req: Request, res: Response) => {
-    try {
-      const customerUserId = req.user!.userId;
-      const {
-        providerId,
-        serviceId,
-        subject,
-        description,
-        budgetMin,
-        budgetMax,
-        currencyCode,
-        preferredDate,
-        initialMessage,
-      } = req.body;
+const safeNotify = async (input: Parameters<typeof createNotification>[0]) => {
+  try {
+    await createNotification(input);
+  } catch (error) {
+    console.error('Failed to create request notification', error);
+  }
+};
 
-      if (!providerId) {
-        res.status(400).json({
-          status: 'error',
-          message: 'providerId is required',
-        });
-        return;
-      }
+const parseOptionalMoney = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return { value: null as string | null };
+  }
 
-      if (!description || !String(description).trim()) {
-        res.status(400).json({
-          status: 'error',
-          message: 'description is required',
-        });
-        return;
-      }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { error: 'Budget values must be valid positive numbers.' };
+  }
 
-      const provider = await AppDataSource.getRepository(ServiceProvider).findOne({
-        where: { id: providerId },
-      });
+  return { value: parsed.toFixed(2) };
+};
 
-      if (!provider) {
-        res.status(404).json({
-          status: 'error',
-          message: 'Provider not found',
-        });
-        return;
-      }
+const parseOptionalDate = (value: unknown) => {
+  if (!value) {
+    return { value: null as Date | null };
+  }
 
-      let service: Service | null = null;
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    return { error: 'Preferred date is invalid.' };
+  }
 
-      if (serviceId) {
-        service = await AppDataSource.getRepository(Service).findOne({
-          where: { id: serviceId, providerId },
-        });
+  return { value: parsed };
+};
 
-        if (!service) {
-          res.status(400).json({
-            status: 'error',
-            message: 'Selected service does not belong to this provider',
-          });
-          return;
-        }
-      }
+router.post('/', authMiddleware, authorizeRole('customer'), async (req: Request, res: Response) => {
+  try {
+    const customerUserId = req.user!.userId;
+    const {
+      providerId,
+      serviceId,
+      subject,
+      description,
+      budgetMin,
+      budgetMax,
+      currencyCode,
+      preferredDate,
+      initialMessage,
+    } = req.body;
 
-      const conversation = await openOrCreateConversation(
-        customerUserId,
-        providerId,
-        serviceId || null,
-        initialMessage || description
-      );
-
-      const requestRepo = AppDataSource.getRepository(ServiceRequest);
-
-      const createdRequest = requestRepo.create({
-        customerUserId,
-        providerId,
-        serviceId: serviceId || null,
-        conversationId: conversation.id,
-        subject: String(subject || service?.name || provider.companyName).trim() || null,
-        description: String(description).trim(),
-        budgetMin: budgetMin !== undefined && budgetMin !== null ? String(budgetMin) : null,
-        budgetMax: budgetMax !== undefined && budgetMax !== null ? String(budgetMax) : null,
-        quotedPrice: null,
-        currencyCode: String(currencyCode || 'DZD').trim() || 'DZD',
-        providerResponse: null,
-        customerNote: null,
-        preferredDate: preferredDate ? new Date(preferredDate) : null,
-        status: ServiceRequestStatus.NEW,
-      });
-
-      await requestRepo.save(createdRequest);
-
-      await appendSystemLikeMessage(
-        conversation.id,
-        customerUserId,
-        'customer',
-        `تم إنشاء طلب خدمة جديد بعنوان: ${createdRequest.subject || 'طلب خدمة'}`
-      );
-
-const customer = await AppDataSource.getRepository(ServiceRequest).findOne({
-  where: { id: createdRequest.id },
-  relations: ['customer', 'provider', 'provider.user'],
-});
-
-if (customer?.provider?.userId) {
-  await createNotification({
-    recipientUserId: customer.provider.userId,
-    actorUserId: customerUserId,
-    type: NotificationType.REQUEST,
-    title: 'طلب خدمة جديد',
-    body: `${customer.customer.firstName} ${customer.customer.lastName}: ${
-      createdRequest.subject || 'طلب خدمة'
-    }`,
-    link: `/provider/requests?requestId=${createdRequest.id}`,
-    metadataJson: {
-      requestId: createdRequest.id,
-      conversationId: conversation.id,
-    },
-  });
-}
-      const result = await requestRepo.findOne({
-        where: { id: createdRequest.id },
-        relations: ['provider', 'provider.user', 'customer', 'service'],
-      });
-
-      res.status(201).json({
-        status: 'success',
-        message: 'Service request created successfully',
-        data: result,
-      });
-    } catch {
-      res.status(500).json({
+    if (!providerId) {
+      res.status(400).json({
         status: 'error',
-        message: 'Failed to create service request',
+        message: 'providerId is required',
+      });
+      return;
+    }
+
+    if (!description || !String(description).trim()) {
+      res.status(400).json({
+        status: 'error',
+        message: 'description is required',
+      });
+      return;
+    }
+
+    const parsedBudgetMin = parseOptionalMoney(budgetMin);
+    if ('error' in parsedBudgetMin) {
+      res.status(400).json({
+        status: 'error',
+        message: parsedBudgetMin.error,
+      });
+      return;
+    }
+
+    const parsedBudgetMax = parseOptionalMoney(budgetMax);
+    if ('error' in parsedBudgetMax) {
+      res.status(400).json({
+        status: 'error',
+        message: parsedBudgetMax.error,
+      });
+      return;
+    }
+
+    if (
+      parsedBudgetMin.value !== null &&
+      parsedBudgetMax.value !== null &&
+      Number(parsedBudgetMin.value) > Number(parsedBudgetMax.value)
+    ) {
+      res.status(400).json({
+        status: 'error',
+        message: 'Budget minimum cannot be greater than budget maximum',
+      });
+      return;
+    }
+
+    const parsedPreferredDate = parseOptionalDate(preferredDate);
+    if ('error' in parsedPreferredDate) {
+      res.status(400).json({
+        status: 'error',
+        message: parsedPreferredDate.error,
+      });
+      return;
+    }
+
+    const provider = await AppDataSource.getRepository(ServiceProvider).findOne({
+      where: { id: providerId },
+      relations: ['user'],
+    });
+
+    if (!provider) {
+      res.status(404).json({
+        status: 'error',
+        message: 'Provider not found',
+      });
+      return;
+    }
+
+    let service: Service | null = null;
+
+    if (serviceId) {
+      service = await AppDataSource.getRepository(Service).findOne({
+        where: { id: serviceId, providerId },
+      });
+
+      if (!service) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Selected service does not belong to this provider',
+        });
+        return;
+      }
+    }
+
+    const conversation = await openOrCreateConversation(
+      customerUserId,
+      providerId,
+      serviceId || null,
+      initialMessage || description
+    );
+
+    const requestRepo = AppDataSource.getRepository(ServiceRequest);
+    const createdRequest = requestRepo.create({
+      customerUserId,
+      providerId,
+      serviceId: serviceId || null,
+      conversationId: conversation.id,
+      subject: String(subject || service?.name || provider.companyName).trim() || null,
+      description: String(description).trim(),
+      budgetMin: parsedBudgetMin.value,
+      budgetMax: parsedBudgetMax.value,
+      quotedPrice: null,
+      currencyCode: String(currencyCode || 'DZD').trim() || 'DZD',
+      providerResponse: null,
+      customerNote: null,
+      preferredDate: parsedPreferredDate.value,
+      status: ServiceRequestStatus.NEW,
+    });
+
+    await requestRepo.save(createdRequest);
+
+    await safeAppendTimelineMessage(
+      conversation.id,
+      customerUserId,
+      'customer',
+      `New service request created: ${createdRequest.subject || 'Service request'}`
+    );
+
+    if (provider.userId) {
+      const senderName = String(req.user?.email || '').trim();
+
+      await safeNotify({
+        recipientUserId: provider.userId,
+        actorUserId: customerUserId,
+        type: NotificationType.REQUEST,
+        title: 'New service request',
+        body: senderName
+          ? `${senderName}: ${createdRequest.subject || 'Service request'}`
+          : createdRequest.subject || 'Service request',
+        link: `/provider/requests?requestId=${createdRequest.id}`,
+        metadataJson: {
+          requestId: createdRequest.id,
+          conversationId: conversation.id,
+        },
       });
     }
+
+    const result = await requestRepo.findOne({
+      where: { id: createdRequest.id },
+      relations: ['provider', 'provider.user', 'customer', 'service'],
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Service request created successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Failed to create service request', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create service request',
+    });
   }
-);
+});
 
 router.get(
   '/customer',
@@ -316,7 +398,8 @@ router.get(
             : null,
         })),
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to fetch customer service requests', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch customer service requests',
@@ -380,7 +463,8 @@ router.get(
             : null,
         })),
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to fetch provider service requests', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch provider service requests',
@@ -437,11 +521,17 @@ router.patch(
         return;
       }
 
-      serviceRequest.quotedPrice =
-        quotedPrice !== undefined && quotedPrice !== null
-          ? String(quotedPrice)
-          : serviceRequest.quotedPrice;
+      const parsedQuote = parseOptionalMoney(quotedPrice);
+      if ('error' in parsedQuote) {
+        res.status(400).json({
+          status: 'error',
+          message: parsedQuote.error,
+        });
+        return;
+      }
 
+      serviceRequest.quotedPrice =
+        quotedPrice !== undefined ? parsedQuote.value : serviceRequest.quotedPrice;
       serviceRequest.providerResponse =
         providerResponse !== undefined
           ? String(providerResponse).trim() || null
@@ -449,41 +539,42 @@ router.patch(
 
       if (status) {
         serviceRequest.status = status;
-      } else if (quotedPrice !== undefined && quotedPrice !== null) {
+      } else if (quotedPrice !== undefined && parsedQuote.value !== null) {
         serviceRequest.status = ServiceRequestStatus.QUOTED;
       }
 
       await requestRepo.save(serviceRequest);
 
       if (serviceRequest.conversationId) {
-        const text = `قام المزود بتحديث الطلب إلى الحالة: ${serviceRequest.status}${
+        const text = `Provider updated the request to ${serviceRequest.status}${
           serviceRequest.quotedPrice
-            ? ` — السعر المقترح: ${serviceRequest.quotedPrice} ${serviceRequest.currencyCode}`
+            ? ` - quote: ${serviceRequest.quotedPrice} ${serviceRequest.currencyCode}`
             : ''
-        }${serviceRequest.providerResponse ? ` — ملاحظة: ${serviceRequest.providerResponse}` : ''}`;
+        }${serviceRequest.providerResponse ? ` - note: ${serviceRequest.providerResponse}` : ''}`;
 
-        await appendSystemLikeMessage(
+        await safeAppendTimelineMessage(
           serviceRequest.conversationId,
           req.user!.userId,
           'service_provider',
           text
         );
-        await createNotification({
-  recipientUserId: serviceRequest.customerUserId,
-  actorUserId: req.user!.userId,
-  type: NotificationType.REQUEST,
-  title: 'تحديث على طلب الخدمة',
-  body: `الحالة الجديدة: ${serviceRequest.status}${
-    serviceRequest.quotedPrice
-      ? ` — العرض: ${serviceRequest.quotedPrice} ${serviceRequest.currencyCode}`
-      : ''
-  }`,
-  link: `/customer/orders?requestId=${serviceRequest.id}`,
-  metadataJson: {
-    requestId: serviceRequest.id,
-    conversationId: serviceRequest.conversationId,
-  },
-});
+
+        await safeNotify({
+          recipientUserId: serviceRequest.customerUserId,
+          actorUserId: req.user!.userId,
+          type: NotificationType.REQUEST,
+          title: 'Service request updated',
+          body: `Status: ${serviceRequest.status}${
+            serviceRequest.quotedPrice
+              ? ` - quote: ${serviceRequest.quotedPrice} ${serviceRequest.currencyCode}`
+              : ''
+          }`,
+          link: `/customer/orders?requestId=${serviceRequest.id}`,
+          metadataJson: {
+            requestId: serviceRequest.id,
+            conversationId: serviceRequest.conversationId,
+          },
+        });
       }
 
       res.status(200).json({
@@ -491,7 +582,8 @@ router.patch(
         message: 'Provider request update saved successfully',
         data: serviceRequest,
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to update provider service request', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to update provider service request',
@@ -545,34 +637,35 @@ router.patch(
       await requestRepo.save(serviceRequest);
 
       if (serviceRequest.conversationId) {
-        const text = `قام العميل بتحديث الطلب إلى الحالة: ${serviceRequest.status}${
-          serviceRequest.customerNote ? ` — ملاحظة: ${serviceRequest.customerNote}` : ''
+        const text = `Customer updated the request to ${serviceRequest.status}${
+          serviceRequest.customerNote ? ` - note: ${serviceRequest.customerNote}` : ''
         }`;
 
-        await appendSystemLikeMessage(
+        await safeAppendTimelineMessage(
           serviceRequest.conversationId,
           req.user!.userId,
           'customer',
           text
         );
-        const provider = await AppDataSource.getRepository(ServiceProvider).findOne({
-  where: { id: serviceRequest.providerId },
-});
 
-if (provider?.userId) {
-  await createNotification({
-    recipientUserId: provider.userId,
-    actorUserId: req.user!.userId,
-    type: NotificationType.REQUEST,
-    title: 'قرار جديد من العميل على الطلب',
-    body: `قام العميل بتحديث الطلب إلى: ${serviceRequest.status}`,
-    link: `/provider/requests?requestId=${serviceRequest.id}`,
-    metadataJson: {
-      requestId: serviceRequest.id,
-      conversationId: serviceRequest.conversationId,
-    },
-  });
-}
+        const provider = await AppDataSource.getRepository(ServiceProvider).findOne({
+          where: { id: serviceRequest.providerId },
+        });
+
+        if (provider?.userId) {
+          await safeNotify({
+            recipientUserId: provider.userId,
+            actorUserId: req.user!.userId,
+            type: NotificationType.REQUEST,
+            title: 'Customer updated a request',
+            body: `Status: ${serviceRequest.status}`,
+            link: `/provider/requests?requestId=${serviceRequest.id}`,
+            metadataJson: {
+              requestId: serviceRequest.id,
+              conversationId: serviceRequest.conversationId,
+            },
+          });
+        }
       }
 
       res.status(200).json({
@@ -580,7 +673,8 @@ if (provider?.userId) {
         message: 'Customer request update saved successfully',
         data: serviceRequest,
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to update customer service request', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to update customer service request',

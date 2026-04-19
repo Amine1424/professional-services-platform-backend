@@ -12,6 +12,12 @@ import ServiceRequest from '../models/ServiceRequest';
 import User from '../models/User';
 import { createNotification } from '../services/notificationService';
 import { NotificationType } from '../models/AppNotification';
+import {
+  buildCategoryTree,
+  collectCategoryAncestryIds,
+  collectCategoryBranchIds,
+  flattenCategoryTree,
+} from '../utils/categoryTree';
 
 const router = Router();
 
@@ -493,12 +499,28 @@ router.get(
   authorizeRole('admin', 'super_admin'),
   async (_req: Request, res: Response) => {
     try {
-      const items = await AppDataSource.getRepository(Category).find();
+      const repo = AppDataSource.getRepository(Category);
+      const items = await repo.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+      const ordered = flattenCategoryTree(buildCategoryTree(items)).map(
+        ({ children, depth, ...item }) => ({
+          ...item,
+          depth,
+        })
+      );
 
       res.status(200).json({
         status: 'success',
         message: 'Categories fetched successfully',
-        data: items,
+        data: ordered,
       });
     } catch {
       res.status(500).json({
@@ -526,6 +548,28 @@ router.post(
       }
 
       const repo = AppDataSource.getRepository(Category);
+      const categories = await repo.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+
+      if (parentId) {
+        const parent = categories.find((item) => item.id === parentId);
+
+        if (!parent) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Parent category not found',
+          });
+          return;
+        }
+      }
 
       const item = repo.create({
         name: String(name).trim(),
@@ -570,6 +614,38 @@ router.put(
         return;
       }
 
+      const categories = await repo.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+
+      if (parentId) {
+        const parent = categories.find((category) => category.id === parentId);
+
+        if (!parent) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Parent category not found',
+          });
+          return;
+        }
+
+        const branchIds = new Set(collectCategoryBranchIds(categories, item.id));
+        if (branchIds.has(String(parentId))) {
+          res.status(400).json({
+            status: 'error',
+            message: 'A category cannot be moved inside its own branch',
+          });
+          return;
+        }
+      }
+
       if (name !== undefined) (item as any).name = String(name).trim();
       if (slug !== undefined) (item as any).slug = String(slug).trim();
       if (description !== undefined) (item as any).description = String(description).trim() || null;
@@ -610,7 +686,25 @@ router.delete(
         return;
       }
 
-      await repo.remove(item);
+      const categories = await repo.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+      const idsToDelete = collectCategoryBranchIds(categories, id).sort((leftId, rightId) => {
+        const leftDepth = collectCategoryAncestryIds(categories, leftId).length;
+        const rightDepth = collectCategoryAncestryIds(categories, rightId).length;
+        return rightDepth - leftDepth;
+      });
+
+      for (const categoryId of idsToDelete) {
+        await repo.delete(categoryId);
+      }
 
       res.status(200).json({
         status: 'success',

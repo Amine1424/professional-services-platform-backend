@@ -3,11 +3,15 @@ import { Router, Request, Response } from 'express';
 const router = Router();
 
 /**
- * @route   GET /
- * @desc    Welcome page
+ * @route   GET /api
+ * @desc    API root info
  * @access  Public
+ *
+ * ملاحظة:
+ * هذا الملف مركب داخل app.ts تحت /api
+ * لذلك route "/" هنا تعني فعليًا "/api"
  */
-router.get('/', (req: Request, res: Response) => {
+router.get('/', (_req: Request, res: Response) => {
   res.json({
     status: 'success',
     message: '🎉 Welcome to Professional Services Platform API',
@@ -18,16 +22,25 @@ router.get('/', (req: Request, res: Response) => {
       postman: '/api/postman-collection.json',
     },
     endpoints: {
+      health: '/api/health',
       auth: '/api/auth',
-      users: '/api/users',
+      categories: '/api/categories',
       services: '/api/services',
       orders: '/api/orders',
-      payments: '/api/payments',
-      reviews: '/api/reviews',
       messages: '/api/messages',
+      notifications: '/api/notifications',
+      providers: '/api/providers',
+      providerMedia: '/api/provider-media',
+      publicProviders: '/api/public-providers',
+      providerReviews: '/api/provider-reviews',
+      discovery: '/api/discovery',
+      customers: '/api/customers',
+      favorites: '/api/favorites',
       admin: '/api/admin',
+      adminRegions: '/api/admin/regions',
+      adminReports: '/api/admin/reports',
       reviewer: '/api/reviewer',
-      subscriptions: '/api/subscriptions',
+      reviewThreads: '/api/review-threads',
     },
     serverStatus: {
       database: 'Connected ✅',
@@ -38,25 +51,33 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 /**
- * @route   GET /api
- * @desc    API Info
+ * @route   GET /api/meta
+ * @desc    Detailed API summary
  * @access  Public
  */
-router.get('/api', (req: Request, res: Response) => {
+router.get('/meta', (_req: Request, res: Response) => {
   res.json({
     status: 'success',
     message: 'Professional Services Platform API v1.0.0',
-    endpoints: {
-      auth: '/api/auth - Authentication endpoints',
-      users: '/api/users - User management',
-      services: '/api/services - Services management',
-      orders: '/api/orders - Orders management',
-      payments: '/api/payments - Payment processing',
-      reviews: '/api/reviews - Reviews and ratings',
-      messages: '/api/messages - Messaging system',
-      admin: '/api/admin - Admin panel',
-      reviewer: '/api/reviewer - Reviewer panel',
-      subscriptions: '/api/subscriptions - Subscription management',
+    modules: {
+      auth: '/api/auth - Authentication and onboarding',
+      categories: '/api/categories - Categories and taxonomy',
+      services: '/api/services - Provider services management',
+      orders: '/api/orders - Requests, leads, and order lifecycle',
+      messages: '/api/messages - Conversations and messages',
+      notifications: '/api/notifications - App notifications',
+      providers: '/api/providers - Provider workspace and profile management',
+      providerMedia: '/api/provider-media - Portfolio/media and interactions',
+      publicProviders: '/api/public-providers - Public provider profiles',
+      providerReviews: '/api/provider-reviews - Reviews and ratings',
+      discovery: '/api/discovery - Explore, search, home feed',
+      customers: '/api/customers - Customer workspace endpoints',
+      favorites: '/api/favorites - Favorite providers',
+      admin: '/api/admin - Admin workspace',
+      adminRegions: '/api/admin/regions - Regions and wilayas management',
+      adminReports: '/api/admin/reports - Reporting and exports',
+      reviewer: '/api/reviewer - Reviewer workspace',
+      reviewThreads: '/api/review-threads - Review inbox and discussion threads',
     },
   });
 });

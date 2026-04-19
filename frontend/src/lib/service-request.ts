@@ -8,79 +8,81 @@ export type ServiceRequestStatus =
   | 'completed'
   | 'cancelled';
 
-export type RequestFilterKey =
-  | 'all'
-  | 'new'
-  | 'quoted'
-  | 'active'
-  | 'closed';
+export type RequestFilterKey = 'all' | 'new' | 'quoted' | 'active' | 'closed';
 
 interface StatusMeta {
   label: string;
   tone: 'neutral' | 'info' | 'warning' | 'success' | 'danger';
   group: 'new' | 'quoted' | 'active' | 'closed';
+  nextAction: string;
 }
 
 export const REQUEST_STATUS_META: Record<string, StatusMeta> = {
   new: {
-    label: 'جديد',
+    label: 'New',
     tone: 'info',
     group: 'new',
+    nextAction: 'Needs first review from the provider.',
   },
   reviewed: {
-    label: 'تمت المراجعة',
+    label: 'Reviewed',
     tone: 'neutral',
     group: 'active',
+    nextAction: 'Provider reviewed the brief and may send a quote next.',
   },
   quoted: {
-    label: 'تم إرسال عرض',
+    label: 'Quote sent',
     tone: 'warning',
     group: 'quoted',
+    nextAction: 'Waiting for the customer to accept, reject, or continue the discussion.',
   },
   accepted: {
-    label: 'تم القبول',
+    label: 'Accepted',
     tone: 'success',
     group: 'active',
+    nextAction: 'The quote was accepted and work can move into execution.',
   },
   in_progress: {
-    label: 'قيد التنفيذ',
+    label: 'In progress',
     tone: 'success',
     group: 'active',
+    nextAction: 'The provider marked the request as underway.',
   },
   completed: {
-    label: 'مكتمل',
+    label: 'Completed',
     tone: 'success',
     group: 'closed',
+    nextAction: 'The request lifecycle is complete.',
   },
   rejected: {
-    label: 'مرفوض',
+    label: 'Rejected',
     tone: 'danger',
     group: 'closed',
+    nextAction: 'The request or quote was rejected and is no longer active.',
   },
   cancelled: {
-    label: 'ملغي',
+    label: 'Cancelled',
     tone: 'danger',
     group: 'closed',
+    nextAction: 'The customer cancelled the request before completion.',
   },
 };
 
-export const REQUEST_FILTERS: Array<{
-  key: RequestFilterKey;
-  label: string;
-}> = [
-  { key: 'all', label: 'الكل' },
-  { key: 'new', label: 'الجديدة' },
-  { key: 'quoted', label: 'العروض' },
-  { key: 'active', label: 'النشطة' },
-  { key: 'closed', label: 'المغلقة' },
+export const REQUEST_FILTERS: Array<{ key: RequestFilterKey; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'new', label: 'New' },
+  { key: 'quoted', label: 'Quotes' },
+  { key: 'active', label: 'Active' },
+  { key: 'closed', label: 'Closed' },
 ];
 
 export const getRequestStatusMeta = (status?: string | null): StatusMeta => {
   if (!status) {
     return {
-      label: 'غير محدد',
+      label: 'Unknown',
       tone: 'neutral',
       group: 'active',
+      nextAction: 'Open the request to inspect the latest details.',
     };
   }
 
@@ -89,14 +91,12 @@ export const getRequestStatusMeta = (status?: string | null): StatusMeta => {
       label: status,
       tone: 'neutral',
       group: 'active',
+      nextAction: 'Open the request to inspect the latest details.',
     }
   );
 };
 
-export const matchesRequestFilter = (
-  status: string,
-  filter: RequestFilterKey
-) => {
+export const matchesRequestFilter = (status: string, filter: RequestFilterKey) => {
   if (filter === 'all') {
     return true;
   }
@@ -114,16 +114,12 @@ export const matchesRequestFilter = (
   return meta.group === filter;
 };
 
-export const formatMoney = (
-  amount?: string | number | null,
-  currencyCode = 'DZD'
-) => {
+export const formatMoney = (amount?: string | number | null, currencyCode = 'DZD') => {
   if (amount === undefined || amount === null || amount === '') {
-    return 'غير محدد';
+    return 'Not specified';
   }
 
   const numeric = Number(amount);
-
   if (Number.isNaN(numeric)) {
     return `${amount} ${currencyCode}`;
   }
@@ -137,26 +133,26 @@ export const formatMoneyRange = (
   currencyCode = 'DZD'
 ) => {
   if (!min && !max) {
-    return 'حسب الحاجة';
+    return 'Based on scope';
   }
 
   if (min && max) {
-    return `${formatMoney(min, currencyCode)} -> ${formatMoney(max, currencyCode)}`;
+    return `${formatMoney(min, currencyCode)} - ${formatMoney(max, currencyCode)}`;
   }
 
   if (min) {
-    return `ابتداءً من ${formatMoney(min, currencyCode)}`;
+    return `Starting from ${formatMoney(min, currencyCode)}`;
   }
 
-  return `حتى ${formatMoney(max, currencyCode)}`;
+  return `Up to ${formatMoney(max, currencyCode)}`;
 };
 
 export const formatRequestDate = (value?: string | null) => {
   if (!value) {
-    return 'غير محدد';
+    return 'Not specified';
   }
 
-  return new Intl.DateTimeFormat('ar-DZ', {
+  return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -165,7 +161,6 @@ export const formatRequestDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-export const getRequestsCountByFilter = (
-  statuses: string[],
-  filter: RequestFilterKey
-) => statuses.filter((status) => matchesRequestFilter(status, filter)).length;
+export const getRequestsCountByFilter = (statuses: string[], filter: RequestFilterKey) => {
+  return statuses.filter((status) => matchesRequestFilter(status, filter)).length;
+};

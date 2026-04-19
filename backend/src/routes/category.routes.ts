@@ -2,6 +2,12 @@ import { Request, Response, Router } from 'express';
 import { AppDataSource } from '../config/database';
 import { authMiddleware, authorizeRole } from '../middleware/auth';
 import { Category } from '../models/Category';
+import {
+  buildCategoryTree,
+  collectCategoryAncestryIds,
+  collectCategoryBranchIds,
+  flattenCategoryTree,
+} from '../utils/categoryTree';
 
 const router = Router();
 
@@ -18,16 +24,26 @@ router.get('/', async (_req: Request, res: Response) => {
     const categoryRepository = AppDataSource.getRepository(Category);
 
     const categories = await categoryRepository.find({
-      relations: ['parent', 'children'],
-      order: {
-        createdAt: 'DESC',
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        iconUrl: true,
+        parentId: true,
       },
     });
+    const ordered = flattenCategoryTree(buildCategoryTree(categories)).map(
+      ({ children, depth, ...category }) => ({
+        ...category,
+        depth,
+      })
+    );
 
     res.status(200).json({
       status: 'success',
       message: 'Categories fetched successfully',
-      data: categories,
+      data: ordered,
     });
   } catch (error) {
     res.status(500).json({
@@ -85,6 +101,28 @@ router.post(
       }
 
       const categoryRepository = AppDataSource.getRepository(Category);
+      const categories = await categoryRepository.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+
+      if (parentId) {
+        const parent = categories.find((item) => item.id === parentId);
+
+        if (!parent) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Parent category not found',
+          });
+          return;
+        }
+      }
 
       let slug = makeSlug(String(name));
       const existingSlug = await categoryRepository.findOne({ where: { slug } });
@@ -139,6 +177,38 @@ router.put(
       }
 
       const { name, description, iconUrl, parentId } = req.body;
+
+      const categories = await categoryRepository.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+
+      if (parentId) {
+        const parent = categories.find((item) => item.id === parentId);
+
+        if (!parent) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Parent category not found',
+          });
+          return;
+        }
+
+        const branchIds = new Set(collectCategoryBranchIds(categories, category.id));
+        if (branchIds.has(String(parentId))) {
+          res.status(400).json({
+            status: 'error',
+            message: 'A category cannot be moved inside its own branch',
+          });
+          return;
+        }
+      }
 
       if (name && String(name).trim() !== category.name) {
         let slug = makeSlug(String(name));
@@ -198,7 +268,25 @@ router.delete(
         return;
       }
 
-      await categoryRepository.remove(category);
+      const categories = await categoryRepository.find({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconUrl: true,
+          parentId: true,
+        },
+      });
+      const idsToDelete = collectCategoryBranchIds(categories, id).sort((leftId, rightId) => {
+        const leftDepth = collectCategoryAncestryIds(categories, leftId).length;
+        const rightDepth = collectCategoryAncestryIds(categories, rightId).length;
+        return rightDepth - leftDepth;
+      });
+
+      for (const categoryId of idsToDelete) {
+        await categoryRepository.delete(categoryId);
+      }
 
       res.status(200).json({
         status: 'success',

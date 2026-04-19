@@ -1,6 +1,17 @@
 .psp-notification-page {
+  --psp-notification-accent: #2563eb;
+  --psp-notification-accent-soft: rgba(37, 99, 235, 0.18);
+  --psp-notification-accent-strong: rgba(37, 99, 235, 0.48);
+  --psp-notification-glow: rgba(37, 99, 235, 0.35);
   display: grid;
   gap: 18px;
+}
+
+.psp-notification-page--provider {
+  --psp-notification-accent: #0f766e;
+  --psp-notification-accent-soft: rgba(15, 118, 110, 0.18);
+  --psp-notification-accent-strong: rgba(45, 212, 191, 0.48);
+  --psp-notification-glow: rgba(15, 118, 110, 0.35);
 }
 
 .psp-notification-summary-grid {
@@ -104,8 +115,8 @@
 }
 
 .psp-notification-filter--active {
-  border-color: rgba(37, 99, 235, 0.48);
-  background: rgba(37, 99, 235, 0.18);
+  border-color: var(--psp-notification-accent-strong);
+  background: var(--psp-notification-accent-soft);
   color: #bfdbfe;
 }
 
@@ -135,12 +146,12 @@
 
 .psp-notification-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(37, 99, 235, 0.35);
+  border-color: var(--psp-notification-glow);
   box-shadow: 0 14px 30px rgba(2, 6, 23, 0.18);
 }
 
 .psp-notification-card--unread {
-  border-color: rgba(37, 99, 235, 0.48);
+  border-color: var(--psp-notification-accent-strong);
   background: linear-gradient(180deg, rgba(19, 35, 61, 0.95), rgba(11, 18, 32, 0.95));
 }
 
@@ -189,7 +200,7 @@
 }
 
 .psp-notification-type--info {
-  background: rgba(37, 99, 235, 0.18);
+  background: var(--psp-notification-accent-soft);
   color: #bfdbfe;
 }
 
@@ -212,7 +223,7 @@
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--psp-notification-accent);
   flex-shrink: 0;
 }
 

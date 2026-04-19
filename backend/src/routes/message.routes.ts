@@ -2,14 +2,13 @@ import { Request, Response, Router } from 'express';
 import { MoreThan } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { authMiddleware, authorizeRole } from '../middleware/auth';
-import Conversation from '../models/Conversation';
+import { NotificationType } from '../models/AppNotification';
+import Conversation, { ConversationStatus } from '../models/Conversation';
 import ConversationMessage from '../models/ConversationMessage';
 import ProviderPreference from '../models/ProviderPreference';
-import ServiceProvider from '../models/ServiceProvider';
 import Service, { ServiceStatus } from '../models/Service';
-import User from '../models/User';
+import ServiceProvider from '../models/ServiceProvider';
 import { createNotification } from '../services/notificationService';
-import { NotificationType } from '../models/AppNotification';
 
 const router = Router();
 
@@ -47,6 +46,21 @@ const ensureProviderPreference = async (providerId: string) => {
   return preference;
 };
 
+const safeNotify = async (input: Parameters<typeof createNotification>[0]) => {
+  try {
+    await createNotification(input);
+  } catch (error) {
+    console.error('Failed to create message notification', error);
+  }
+};
+
+const updateConversationActivity = async (
+  conversationId: string,
+  patch: Partial<Conversation>
+) => {
+  await AppDataSource.getRepository(Conversation).update({ id: conversationId }, patch);
+};
+
 const buildReplyFromContext = (
   provider: ServiceProvider,
   services: Service[],
@@ -54,79 +68,66 @@ const buildReplyFromContext = (
   preference: ProviderPreference
 ) => {
   const normalizedMessage = customerMessage.toLowerCase();
-
-  const publishedServices = services.filter(
-    (service) => service.status === ServiceStatus.PUBLISHED
-  );
-
+  const publishedServices = services.filter((service) => service.status === ServiceStatus.PUBLISHED);
   const sourceServices = publishedServices.length ? publishedServices : services;
 
-  const scored = sourceServices.map((service) => {
-    const haystack = `${service.name} ${service.description} ${service.category?.name || ''}`.toLowerCase();
-    let score = 0;
+  const scoredServices = sourceServices
+    .map((service) => {
+      const haystack =
+        `${service.name} ${service.description} ${service.category?.name || ''}`.toLowerCase();
+      const score = normalizedMessage
+        .split(/\s+/)
+        .filter((token) => token.length > 2)
+        .reduce((total, token) => total + (haystack.includes(token) ? 1 : 0), 0);
 
-    const tokens = normalizedMessage.split(/\s+/).filter(Boolean);
-    tokens.forEach((token) => {
-      if (token.length > 2 && haystack.includes(token)) {
-        score += 1;
-      }
-    });
-
-    return { service, score };
-  });
-
-  const matchedServices = scored
+      return {
+        service,
+        score,
+      };
+    })
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.service)
     .slice(0, 3);
 
-  const toneIntro =
+  const intro =
     preference.autoReplyTone === 'friendly'
-      ? `مرحبًا 👋، معك ${provider.companyName}. شكرًا على رسالتك.`
+      ? `Hello, this is ${provider.companyName}. Thanks for reaching out.`
       : preference.autoReplyTone === 'concise'
-      ? `مرحبًا، شكرًا لتواصلك مع ${provider.companyName}.`
-      : `مرحبًا، نشكرك على التواصل مع ${provider.companyName}.`;
+        ? `Hello, thanks for contacting ${provider.companyName}.`
+        : `Hello, thank you for contacting ${provider.companyName}.`;
 
-  const serviceLines =
-    matchedServices.length > 0
-      ? matchedServices
-          .map((service) => {
-            const priceText = service.price
-              ? ` — السعر: ${service.price} ${service.currencyCode}`
+  const serviceLines = scoredServices.length
+    ? scoredServices
+        .map((service) => {
+          const price = service.price ? ` - price: ${service.price} ${service.currencyCode}` : '';
+          const badge =
+            service.showPromoBadge && service.promoBadgeText
+              ? ` - offer: ${service.promoBadgeText}`
               : '';
-            const badgeText =
-              service.showPromoBadge && service.promoBadgeText
-                ? ` — العرض: ${service.promoBadgeText}`
-                : '';
 
-            return `• ${service.name}${priceText}${badgeText}`;
-          })
-          .join('\n')
-      : '• يمكننا مساعدتك بعد توضيح نوع الخدمة المطلوبة أكثر.';
+          return `- ${service.name}${price}${badge}`;
+        })
+        .join('\n')
+    : '- We can help once we know a bit more about the requested scope and location.';
 
-  const responseTimeText =
+  const responseTime =
     provider.responseTimeMinutes > 0
-      ? `عادةً نرد خلال حوالي ${provider.responseTimeMinutes} دقيقة.`
-      : 'سنرد عليك في أقرب وقت ممكن.';
+      ? `We usually reply within about ${provider.responseTimeMinutes} minutes.`
+      : 'We will reply as soon as possible.';
 
   const closing =
-    'إذا رغبت، أرسل لنا تفاصيل أكثر مثل المدينة، نوع الخدمة، والميزانية المتوقعة حتى نوجهك بشكل أدق.';
-
-  const signature = preference.autoReplySignature
-    ? `\n\n${preference.autoReplySignature}`
-    : '';
-
-  const reply = `${toneIntro}
-
-الخدمات الأقرب لطلبك:
-${serviceLines}
-
-${responseTimeText}
-${closing}${signature}`;
+    'If you can, share a few more details such as city, expected scope, and budget so we can guide you more precisely.';
+  const signature = preference.autoReplySignature ? `\n\n${preference.autoReplySignature}` : '';
 
   return {
-    matchedServices,
-    reply,
+    matchedServices: scoredServices,
+    reply: `${intro}
+
+Closest matching services:
+${serviceLines}
+
+${responseTime}
+${closing}${signature}`,
   };
 };
 
@@ -136,13 +137,14 @@ const conversationBelongsToUser = async (
   role: string
 ) => {
   const conversationRepo = AppDataSource.getRepository(Conversation);
-
   const conversation = await conversationRepo.findOne({
     where: { id: conversationId },
     relations: ['provider', 'provider.user', 'customer', 'service'],
   });
 
-  if (!conversation) return null;
+  if (!conversation) {
+    return null;
+  }
 
   if (role === 'customer' && conversation.customerUserId === userId) {
     return conversation;
@@ -166,7 +168,6 @@ router.get(
     try {
       const role = req.user!.role;
       const userId = req.user!.userId;
-
       const conversationRepo = AppDataSource.getRepository(Conversation);
       const messageRepo = AppDataSource.getRepository(ConversationMessage);
       const preferenceRepo = AppDataSource.getRepository(ProviderPreference);
@@ -184,7 +185,6 @@ router.get(
         });
       } else {
         const provider = await getProviderForUser(userId);
-
         if (!provider) {
           res.status(404).json({
             status: 'error',
@@ -204,13 +204,12 @@ router.get(
       }
 
       const providerIds = Array.from(new Set(conversations.map((item) => item.providerId)));
-      const prefs = providerIds.length
+      const preferences = providerIds.length
         ? await preferenceRepo.find({
             where: providerIds.map((providerId) => ({ providerId })),
           })
         : [];
-
-      const prefMap = new Map(prefs.map((item) => [item.providerId, item]));
+      const preferenceMap = new Map(preferences.map((item) => [item.providerId, item]));
 
       const items = await Promise.all(
         conversations.map(async (conversation) => {
@@ -235,7 +234,7 @@ router.get(
                   },
                 });
 
-          const pref = prefMap.get(conversation.providerId);
+          const preference = preferenceMap.get(conversation.providerId);
 
           return {
             id: conversation.id,
@@ -255,7 +254,7 @@ router.get(
               companyName: conversation.provider.companyName,
               avatarUrl: conversation.provider.avatarUrl,
               isVerified: conversation.provider.isVerified,
-              profileBadgeText: pref?.profileBadgeText || null,
+              profileBadgeText: preference?.profileBadgeText || null,
             },
             customer: {
               id: conversation.customer.id,
@@ -272,7 +271,8 @@ router.get(
         message: 'Conversations fetched successfully',
         data: items,
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to fetch conversations', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch conversations',
@@ -327,8 +327,7 @@ router.post(
 
       const conversationRepo = AppDataSource.getRepository(Conversation);
       const messageRepo = AppDataSource.getRepository(ConversationMessage);
-
-      const qb = conversationRepo
+      const query = conversationRepo
         .createQueryBuilder('conversation')
         .leftJoinAndSelect('conversation.provider', 'provider')
         .leftJoinAndSelect('conversation.customer', 'customer')
@@ -337,12 +336,12 @@ router.post(
         .andWhere('conversation.provider_id = :providerId', { providerId });
 
       if (serviceId) {
-        qb.andWhere('conversation.service_id = :serviceId', { serviceId });
+        query.andWhere('conversation.service_id = :serviceId', { serviceId });
       } else {
-        qb.andWhere('conversation.service_id IS NULL');
+        query.andWhere('conversation.service_id IS NULL');
       }
 
-      let conversation = await qb.getOne();
+      let conversation = await query.getOne();
 
       if (!conversation) {
         let subject: string | null = provider.companyName;
@@ -359,7 +358,7 @@ router.post(
           providerId,
           serviceId: serviceId || null,
           subject,
-          status: 'open' as any,
+          status: ConversationStatus.OPEN,
           lastMessagePreview: null,
           lastMessageAt: null,
           lastReadCustomerAt: null,
@@ -370,21 +369,23 @@ router.post(
       }
 
       if (initialMessage && String(initialMessage).trim()) {
+        const body = String(initialMessage).trim();
         const message = messageRepo.create({
           conversationId: conversation.id,
           senderUserId: customerUserId,
           senderRole: 'customer',
-          body: String(initialMessage).trim(),
+          body,
           isAiAssisted: false,
         });
 
         await messageRepo.save(message);
 
-        conversation.lastMessagePreview = String(initialMessage).trim().slice(0, 500);
-        conversation.lastMessageAt = new Date();
-        conversation.lastReadCustomerAt = new Date();
-
-        await conversationRepo.save(conversation);
+        await updateConversationActivity(conversation.id, {
+          lastMessagePreview: body.slice(0, 500),
+          lastMessageAt: new Date(),
+          lastReadCustomerAt: new Date(),
+          status: ConversationStatus.OPEN,
+        });
       }
 
       const result = await conversationRepo.findOne({
@@ -397,7 +398,8 @@ router.post(
         message: 'Conversation created or opened successfully',
         data: result,
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to create or open conversation', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to create or open conversation',
@@ -417,7 +419,6 @@ router.get(
       const role = req.user!.role;
 
       const conversation = await conversationBelongsToUser(conversationId, userId, role);
-
       if (!conversation) {
         res.status(404).json({
           status: 'error',
@@ -466,11 +467,12 @@ router.get(
             createdAt: message.createdAt,
             senderName: message.sender
               ? `${message.sender.firstName} ${message.sender.lastName}`.trim()
-              : 'Utilisateur',
+              : 'User',
           })),
         },
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to fetch conversation messages', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch conversation messages',
@@ -499,7 +501,6 @@ router.post(
       }
 
       const conversation = await conversationBelongsToUser(conversationId, userId, role);
-
       if (!conversation) {
         res.status(404).json({
           status: 'error',
@@ -509,57 +510,61 @@ router.post(
       }
 
       const senderRole = role === 'customer' ? 'customer' : 'service_provider';
+      const trimmedBody = String(body).trim();
 
       const message = AppDataSource.getRepository(ConversationMessage).create({
         conversationId,
         senderUserId: userId,
         senderRole,
-        body: String(body).trim(),
+        body: trimmedBody,
         isAiAssisted: Boolean(isAiAssisted),
       });
 
       await AppDataSource.getRepository(ConversationMessage).save(message);
 
-      conversation.lastMessagePreview = String(body).trim().slice(0, 500);
-      conversation.lastMessageAt = new Date();
-
       if (senderRole === 'customer') {
-        conversation.lastReadCustomerAt = new Date();
+        await updateConversationActivity(conversation.id, {
+          lastMessagePreview: trimmedBody.slice(0, 500),
+          lastMessageAt: new Date(),
+          lastReadCustomerAt: new Date(),
+          status: ConversationStatus.OPEN,
+        });
       } else {
-        conversation.lastReadProviderAt = new Date();
+        await updateConversationActivity(conversation.id, {
+          lastMessagePreview: trimmedBody.slice(0, 500),
+          lastMessageAt: new Date(),
+          lastReadProviderAt: new Date(),
+          status: ConversationStatus.OPEN,
+        });
       }
-
-      await AppDataSource.getRepository(Conversation).save(conversation);
 
       const saved = await AppDataSource.getRepository(ConversationMessage).findOne({
         where: { id: message.id },
         relations: ['sender'],
       });
 
-const recipientUserId =
-  senderRole === 'customer'
-    ? conversation.provider.userId
-    : conversation.customerUserId;
+      const recipientUserId =
+        senderRole === 'customer' ? conversation.provider.userId : conversation.customerUserId;
+      const senderDisplayName =
+        senderRole === 'customer'
+          ? `${conversation.customer.firstName} ${conversation.customer.lastName}`.trim()
+          : conversation.provider.companyName;
 
-const senderDisplayName =
-  senderRole === 'customer'
-    ? `${conversation.customer.firstName} ${conversation.customer.lastName}`.trim()
-    : conversation.provider.companyName;
+      await safeNotify({
+        recipientUserId,
+        actorUserId: userId,
+        type: NotificationType.MESSAGE,
+        title: `New message from ${senderDisplayName}`,
+        body: trimmedBody.slice(0, 180),
+        link:
+          senderRole === 'customer'
+            ? `/provider/messages?conversationId=${conversation.id}`
+            : `/customer/messages?conversationId=${conversation.id}`,
+        metadataJson: {
+          conversationId: conversation.id,
+        },
+      });
 
-await createNotification({
-  recipientUserId,
-  actorUserId: userId,
-  type: NotificationType.MESSAGE,
-  title: `رسالة جديدة من ${senderDisplayName}`,
-  body: String(body).trim().slice(0, 180),
-  link:
-    senderRole === 'customer'
-      ? `/provider/messages?conversationId=${conversation.id}`
-      : `/customer/messages?conversationId=${conversation.id}`,
-  metadataJson: {
-    conversationId: conversation.id,
-  },
-});
       res.status(201).json({
         status: 'success',
         message: 'Message sent successfully',
@@ -573,10 +578,11 @@ await createNotification({
           createdAt: saved!.createdAt,
           senderName: saved!.sender
             ? `${saved!.sender.firstName} ${saved!.sender.lastName}`.trim()
-            : 'Utilisateur',
+            : 'User',
         },
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to send message', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to send message',
@@ -596,7 +602,6 @@ router.post(
       const role = req.user!.role;
 
       const conversation = await conversationBelongsToUser(conversationId, userId, role);
-
       if (!conversation) {
         res.status(404).json({
           status: 'error',
@@ -606,18 +611,21 @@ router.post(
       }
 
       if (role === 'customer') {
-        conversation.lastReadCustomerAt = new Date();
+        await updateConversationActivity(conversation.id, {
+          lastReadCustomerAt: new Date(),
+        });
       } else {
-        conversation.lastReadProviderAt = new Date();
+        await updateConversationActivity(conversation.id, {
+          lastReadProviderAt: new Date(),
+        });
       }
-
-      await AppDataSource.getRepository(Conversation).save(conversation);
 
       res.status(200).json({
         status: 'success',
         message: 'Conversation marked as read',
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to mark conversation as read', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to mark conversation as read',
@@ -638,7 +646,6 @@ router.post(
       const { customerMessage } = req.body;
 
       const conversation = await conversationBelongsToUser(conversationId, userId, role);
-
       if (!conversation) {
         res.status(404).json({
           status: 'error',
@@ -648,7 +655,6 @@ router.post(
       }
 
       const provider = await getProviderForUser(userId);
-
       if (!provider) {
         res.status(404).json({
           status: 'error',
@@ -658,7 +664,6 @@ router.post(
       }
 
       const preference = await ensureProviderPreference(provider.id);
-
       const services = await AppDataSource.getRepository(Service).find({
         where: { providerId: provider.id },
         relations: ['category'],
@@ -687,12 +692,7 @@ router.post(
         return;
       }
 
-      const result = buildReplyFromContext(
-        provider,
-        services,
-        effectiveMessage,
-        preference
-      );
+      const result = buildReplyFromContext(provider, services, effectiveMessage, preference);
 
       res.status(200).json({
         status: 'success',
@@ -704,7 +704,8 @@ router.post(
           reply: result.reply,
         },
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to generate AI reply preview', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to generate AI reply preview',
