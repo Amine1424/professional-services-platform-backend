@@ -1,5 +1,6 @@
 import React from 'react';
 import { Star } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { formatDateLabel } from '../../lib/strings';
 import { ReviewItem } from './types';
 
@@ -23,13 +24,15 @@ const ProviderReviewsSection: React.FC<ProviderReviewsSectionProps> = ({
   onCommentChange,
   onSubmit,
 }) => {
+  const { t } = useI18n();
+
   return (
     <section id="provider-reviews" className="psp-surface">
       <div className="psp-surface__header">
         <div>
-          <h2>Customer reviews</h2>
+          <h2>{t('Customer reviews')}</h2>
           <div className="psp-surface__sub">
-            Ratings are public quality signals and feed the discovery ranking.
+            {t('Ratings are public quality signals and feed the discovery ranking.')}
           </div>
         </div>
       </div>
@@ -37,10 +40,10 @@ const ProviderReviewsSection: React.FC<ProviderReviewsSectionProps> = ({
       <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="rounded-[24px] bg-slate-50 p-5">
           <div className="text-[20px] font-black tracking-tight text-slate-900">
-            {hasExistingReview ? 'Update your review' : 'Leave a review'}
+            {hasExistingReview ? t('Update your review') : t('Leave a review')}
           </div>
           <div className="mt-2 text-sm leading-7 text-slate-500">
-            Customer reviews require a customer account.
+            {t('Customer reviews require a customer account.')}
           </div>
 
           <div className="mt-5 grid gap-3">
@@ -51,7 +54,7 @@ const ProviderReviewsSection: React.FC<ProviderReviewsSectionProps> = ({
             >
               {[1, 2, 3, 4, 5].map((value) => (
                 <option key={value} value={value}>
-                  {value} star{value === 1 ? '' : 's'}
+                  {value} {t(value === 1 ? 'star' : 'stars')}
                 </option>
               ))}
             </select>
@@ -59,18 +62,18 @@ const ProviderReviewsSection: React.FC<ProviderReviewsSectionProps> = ({
             <textarea
               value={reviewForm.comment}
               onChange={(event) => onCommentChange(event.target.value)}
-              placeholder="Describe the quality of the interaction and the delivered work."
+              placeholder={t('Describe the quality of the interaction and the delivered work.')}
               className="psp-textarea"
             />
 
             <button type="button" className="psp-button psp-button--primary" onClick={onSubmit}>
-              {hasExistingReview ? 'Update review' : 'Submit review'}
+              {hasExistingReview ? t('Update review') : t('Submit review')}
             </button>
           </div>
         </div>
 
         {!reviews.length ? (
-          <div className="psp-empty-state">No customer reviews have been published yet.</div>
+          <div className="psp-empty-state">{t('No customer reviews have been published yet.')}</div>
         ) : (
           <div className="psp-list">
             {reviews.map((review) => (
@@ -86,7 +89,7 @@ const ProviderReviewsSection: React.FC<ProviderReviewsSectionProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-sm leading-7 text-slate-600">
-                  {review.comment || 'No written comment was provided.'}
+                  {review.comment || t('No written comment was provided.')}
                 </div>
               </article>
             ))}

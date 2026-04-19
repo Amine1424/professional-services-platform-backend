@@ -177,7 +177,7 @@ const ReviewerHistory: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Decision filters</h2>
+            <h2>{t('Decision filters')}</h2>
             <div className="psp-surface__sub">
               {t('Narrow the archive by moderation outcome before reopening a provider record.')}
             </div>

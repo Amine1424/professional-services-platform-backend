@@ -1,5 +1,6 @@
 import React from 'react';
 import { BadgeCheck, Clock3, Heart, MapPin, MessageCircle, Quote, Star } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { PublicProviderPayload } from './types';
 
 interface ProviderHeroProps {
@@ -25,6 +26,8 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
   onRequest,
   onToggleFavorite,
 }) => {
+  const { t } = useI18n();
+
   return (
     <section id="provider-overview" className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
       <div className="rounded-[30px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_45px_rgba(15,23,42,0.08)]">
@@ -37,17 +40,18 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
           {provider.isVerified ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
               <BadgeCheck size={14} />
-              Verified provider
+              {t('Verified provider')}
             </span>
           ) : null}
           {provider.preference.featuredOnHomepage ? (
             <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white">
-              Featured
+              {t('Featured')}
             </span>
           ) : null}
           {storiesCount > 0 ? (
             <span className="rounded-full bg-fuchsia-600 px-3 py-1 text-xs font-bold text-white">
-              {storiesCount} active stor{storiesCount === 1 ? 'y' : 'ies'}
+              {storiesCount}{' '}
+              {t(storiesCount === 1 ? 'active story' : 'active stories')}
             </span>
           ) : null}
         </div>
@@ -70,7 +74,7 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
               {provider.companyName}
             </h1>
             <div className="mt-2 text-sm font-semibold text-slate-500">
-              {ownerName || 'Provider account'}
+              {ownerName || t('Provider account')}
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-slate-500">
               <span className="inline-flex items-center gap-2">
@@ -82,36 +86,51 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
               </span>
               <span className="inline-flex items-center gap-2">
                 <Star size={15} fill="currentColor" className="text-amber-400" />
-                {Number(provider.averageRating || 0).toFixed(1)} ({provider.reviewsCount} reviews)
+                {Number(provider.averageRating || 0).toFixed(1)} ({provider.reviewsCount}{' '}
+                {t('reviews')})
               </span>
               <span className="inline-flex items-center gap-2">
                 <Clock3 size={15} />
-                {provider.responseTimeMinutes || 0} min
+                {provider.responseTimeMinutes || 0} {t('min')}
               </span>
             </div>
           </div>
         </div>
 
         <p className="mt-6 text-[16px] leading-8 text-slate-600">
-          {provider.description || 'This provider has not added a professional summary yet.'}
+          {provider.description || t('This provider has not added a professional summary yet.')}
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button type="button" className="psp-button psp-button--primary" onClick={onMessage}>
-            <MessageCircle size={16} />
-            Message provider
-          </button>
-          <button type="button" className="psp-button psp-button--secondary" onClick={onRequest}>
+        <div className="mt-6">
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+            {t('Next step')}
+          </div>
+          <div className="mt-2 text-sm leading-7 text-slate-600">
+            {t(
+              'Compare services first, then either send a scoped request or open a direct conversation.'
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" className="psp-button psp-button--primary" onClick={onRequest}>
             <Quote size={16} />
-            Request a quote
+            {t('Request a quote')}
           </button>
+          <button type="button" className="psp-button psp-button--secondary" onClick={onMessage}>
+            <MessageCircle size={16} />
+            {t('Message provider')}
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="button"
             className="psp-control-pill"
             onClick={onToggleFavorite}
           >
             <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
-            {isFavorite ? 'Saved to favorites' : 'Save provider'}
+            {isFavorite ? t('Saved to favorites') : t('Save provider')}
           </button>
           {storiesCount > 0 && onOpenStories ? (
             <button
@@ -119,7 +138,7 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
               className="psp-control-pill"
               onClick={onOpenStories}
             >
-              View stories
+              {t('View stories')}
             </button>
           ) : null}
         </div>
@@ -138,9 +157,9 @@ const ProviderHero: React.FC<ProviderHeroProps> = ({
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.05),rgba(15,23,42,0.68))]" />
         <div className="absolute inset-x-0 bottom-0 p-6 text-white">
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-white/80">
-            {provider.primaryCategory?.name || 'Professional services'}
+            {provider.primaryCategory?.name || t('Professional services')}
           </div>
-          <div className="mt-3 text-[28px] font-black tracking-tight">{provider.companyName}</div>
+          <div className="mt-3 text-[20px] font-black tracking-tight">{providerLocation}</div>
           <div className="mt-2 text-sm text-white/80">{provider.serviceCoverage.label}</div>
         </div>
       </div>

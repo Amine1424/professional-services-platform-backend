@@ -135,7 +135,7 @@ export const AdminContent: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Moderation queue</h2>
+            <h2>{t('Moderation queue')}</h2>
             <div className="psp-surface__sub">
               {t('Search by author, body text, or media title before taking a removal action.')}
             </div>

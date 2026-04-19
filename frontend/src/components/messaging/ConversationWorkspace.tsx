@@ -201,10 +201,10 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
 
   const counterpartName =
     mode === 'customer'
-      ? selectedConversation?.provider.companyName || 'Provider'
+      ? selectedConversation?.provider.companyName || t('Provider')
       : `${selectedConversation?.customer.firstName || ''} ${
           selectedConversation?.customer.lastName || ''
-        }`.trim() || 'Customer';
+        }`.trim() || t('Customer');
 
   const unreadThreads = conversations.filter((item) => item.unreadCount > 0).length;
   const serviceLinkedThreads = conversations.filter((item) => Boolean(item.service?.name)).length;
@@ -217,7 +217,7 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
     selectedConversation?.service?.name ||
     selectedConversation?.subject ||
     t('General conversation');
-  const selectedStatusLabel = selectedConversation?.status || 'open';
+  const selectedStatusLabel = selectedConversation?.status || t('open');
   const providerReplyGuidance = useMemo(() => {
     if (mode !== 'provider' || !selectedConversation) {
       return '';
@@ -673,7 +673,7 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <strong className="truncate text-sm text-slate-900">
-                              {counterpart || 'Conversation'}
+                              {counterpart || t('Conversation')}
                             </strong>
                             {mode === 'provider' ? (
                               <div className="mt-1 truncate text-xs text-slate-500">
@@ -754,7 +754,7 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
                       {mode === 'customer' && selectedConversation.provider.isVerified ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                           <ShieldCheck size={14} />
-                          Verified
+                          {t('Verified')}
                         </span>
                       ) : null}
 

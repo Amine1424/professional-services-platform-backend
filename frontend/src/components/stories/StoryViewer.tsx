@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { formatDateTimeLabel } from '../../lib/strings';
 
 export interface StoryViewerItem {
@@ -69,8 +70,9 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
   onPrev,
   onNext,
   onProviderAction,
-  providerActionLabel = 'Open provider profile',
+  providerActionLabel,
 }) => {
+  const { t } = useI18n();
   const activeStory =
     activeIndex !== null && activeIndex >= 0 && activeIndex < stories.length
       ? stories[activeIndex]
@@ -79,6 +81,8 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
   if (!activeStory) {
     return null;
   }
+
+  const effectiveProviderActionLabel = providerActionLabel || t('Open provider profile');
 
   const canGoPrev = activeIndex !== null && activeIndex > 0;
   const canGoNext =
@@ -133,7 +137,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
               <div className="min-w-0">
                 <div className="truncate text-[17px] font-black">{activeStory.providerName}</div>
                 <div className="truncate text-sm text-white/75">
-                  {activeStory.providerLocation || 'Algeria'}
+                  {activeStory.providerLocation || t('Algeria')}
                 </div>
               </div>
             </div>
@@ -144,7 +148,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
-                Story viewer
+                {t('Story viewer')}
               </div>
               <h3 className="mt-3 text-[28px] font-black tracking-tight text-slate-900">
                 {activeStory.title}
@@ -159,7 +163,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
 
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-fuchsia-100 px-3 py-1 text-xs font-bold text-fuchsia-700">
-              Story
+              {t('Story')}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
               {activeStory.storyAudience === 'favorites_only' ? (
@@ -167,7 +171,9 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
               ) : (
                 <Globe size={12} />
               )}
-              {activeStory.storyAudience === 'favorites_only' ? 'Favorites only' : 'Public'}
+              {activeStory.storyAudience === 'favorites_only'
+                ? t('Favorites only')
+                : t('Public')}
             </span>
             {activeStory.service?.name ? (
               <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
@@ -184,23 +190,23 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-[22px] bg-slate-50 p-4">
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                Story stats
+                {t('Story stats')}
               </div>
               <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold text-slate-600">
                 <span className="inline-flex items-center gap-2">
                   <Sparkles size={14} />
-                  {stories.length} story{stories.length === 1 ? '' : 'ies'}
+                  {stories.length} {t(stories.length === 1 ? 'story' : 'stories')}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <MessageCircle size={14} />
-                  {activeStory.commentsCount} comments
+                  {activeStory.commentsCount} {t('comments')}
                 </span>
               </div>
             </div>
 
             <div className="rounded-[22px] bg-slate-50 p-4">
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                Format
+                {t('Format')}
               </div>
               <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold text-slate-600">
                 <span className="inline-flex items-center gap-2">
@@ -209,20 +215,20 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
                   ) : (
                     <Camera size={14} />
                   )}
-                  {activeStory.mediaType === 'video' ? 'Video story' : 'Image story'}
+                  {activeStory.mediaType === 'video' ? t('Video story') : t('Image story')}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <Sparkles size={14} />
                   {activeStory.storyExpiresAt
-                    ? `Expires ${formatDateTimeLabel(activeStory.storyExpiresAt)}`
-                    : 'Active now'}
+                    ? `${t('Expires')} ${formatDateTimeLabel(activeStory.storyExpiresAt)}`
+                    : t('Active now')}
                 </span>
               </div>
             </div>
           </div>
 
           <div className="grid gap-3">
-            <div className="text-sm font-bold text-slate-700">Reply to this story</div>
+            <div className="text-sm font-bold text-slate-700">{t('Reply to this story')}</div>
             <textarea
               value={replyDraft}
               onChange={(event) => onReplyDraftChange(event.target.value)}
@@ -240,7 +246,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
               className="psp-button psp-button--secondary"
             >
               <ChevronLeft size={16} />
-              Previous
+              {t('Previous')}
             </button>
             <button
               type="button"
@@ -248,7 +254,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
               disabled={!canGoNext}
               className="psp-button psp-button--secondary"
             >
-              Next
+              {t('Next')}
               <ChevronRight size={16} />
             </button>
             <button
@@ -258,7 +264,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
               className="psp-button psp-button--primary"
             >
               <Send size={16} />
-              {replying ? 'Sending...' : replyButtonLabel}
+              {replying ? t('Sending...') : replyButtonLabel}
             </button>
             {onProviderAction ? (
               <button
@@ -266,7 +272,7 @@ const StoryViewer: React.FC<StoryViewerProps> = ({
                 onClick={() => onProviderAction(activeStory)}
                 className="psp-button psp-button--secondary"
               >
-                {providerActionLabel}
+                {effectiveProviderActionLabel}
               </button>
             ) : null}
           </div>

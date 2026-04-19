@@ -186,13 +186,13 @@ const ProviderDashboard: React.FC = () => {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/provider/profile" className="psp-button bg-white text-slate-900">
+              <Link to="/provider/profile" className="psp-button psp-button--secondary">
                 {t('Update profile')}
               </Link>
-              <Link to="/provider/services" className="psp-button border border-white/20 bg-white/10 text-white">
+              <Link to="/provider/services" className="psp-button psp-button--ghost">
                 {t('Manage services')}
               </Link>
-              <Link to="/provider/messages" className="psp-button border border-white/20 bg-white/10 text-white">
+              <Link to="/provider/messages" className="psp-button psp-button--ghost">
                 {t('Open inbox')}
               </Link>
             </div>
@@ -261,7 +261,7 @@ const ProviderDashboard: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Operational priorities</h2>
+              <h2>{t('Operational priorities')}</h2>
               <div className="psp-surface__sub">
                 {t(
                   'These areas influence how complete, responsive, and convertible the provider account feels.'
@@ -283,7 +283,7 @@ const ProviderDashboard: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Growth levers</h2>
+              <h2>{t('Growth levers')}</h2>
               <div className="psp-surface__sub">
                 {t('Premium capabilities that change how your account is seen in discovery.')}
               </div>
@@ -338,7 +338,7 @@ const ProviderDashboard: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Recent services</h2>
+              <h2>{t('Recent services')}</h2>
               <div className="psp-surface__sub">
                 {t('Keep draft inventory low and make public offers easier to trust.')}
               </div>
@@ -360,8 +360,10 @@ const ProviderDashboard: React.FC = () => {
                     <div>
                       <h3 className="psp-list-card__title">{service.name}</h3>
                       <div className="psp-list-card__meta">
-                        {service.category?.name || 'No category'} • {service.status} •{' '}
-                        {service.price ? `${service.price} ${service.currencyCode}` : 'Price on request'}
+                        {service.category?.name || t('No category')} | {t(service.status)} |{' '}
+                        {service.price
+                          ? `${service.price} ${service.currencyCode}`
+                          : t('Price on request')}
                       </div>
                     </div>
                     {service.showPromoBadge && service.promoBadgeText ? (

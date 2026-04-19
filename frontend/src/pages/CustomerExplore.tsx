@@ -27,6 +27,7 @@ import {
   buildGoogleMapsSearchUrl,
   MARKET_REGIONS,
 } from '../lib/algeria';
+import { useI18n } from '../i18n';
 import '../styles/app-primitives.css';
 import { getStoredUser } from '../lib/role-routing';
 
@@ -115,6 +116,7 @@ const CustomerExplore: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useI18n();
   const currentUser = useMemo(() => getStoredUser(), []);
   const isStandalone = !location.pathname.startsWith('/customer/');
 
@@ -206,7 +208,7 @@ const CustomerExplore: React.FC = () => {
       } catch (requestError: any) {
         if (!active) return;
         setProviders([]);
-        setError(requestError.response?.data?.message || 'Failed to load discovery results.');
+        setError(requestError.response?.data?.message || t('Failed to load discovery results.'));
       } finally {
         if (active) {
           setLoadingResults(false);
@@ -219,7 +221,7 @@ const CustomerExplore: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [activeFilters, categories, loadingCategories]);
+  }, [activeFilters, categories, loadingCategories, t]);
 
   const rankedProviders = useMemo(() => {
     const results = [...providers];
@@ -333,14 +335,15 @@ const CustomerExplore: React.FC = () => {
         <div className="rounded-[30px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_50px_rgba(15,23,42,0.08)]">
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700">
             <Sparkles size={14} />
-            Local-first Algerian discovery
+            {t('Local-first Algerian discovery')}
           </div>
           <h1 className="mt-4 text-[32px] font-black tracking-tight text-slate-900 md:text-[44px]">
-            Search providers with local precision
+            {t('Search providers with local precision')}
           </h1>
           <p className="mt-4 max-w-[640px] text-[16px] leading-8 text-slate-500">
-            Discovery is now structured around Algeria-specific geography. Search by service need,
-            city, region, wilaya, and category without losing deep-linking or ranking quality.
+            {t(
+              'Discovery is now structured around Algeria-specific geography. Search by service need, city, region, wilaya, and category without losing deep-linking or ranking quality.'
+            )}
           </p>
 
           <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.9fr_0.85fr_auto]">
@@ -351,7 +354,7 @@ const CustomerExplore: React.FC = () => {
                 onChange={(event) =>
                   setDraftFilters((current) => ({ ...current, query: event.target.value }))
                 }
-                placeholder="Search by service, skill, or category"
+                placeholder={t('Search by service, skill, or category')}
                 className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
               />
             </label>
@@ -363,7 +366,7 @@ const CustomerExplore: React.FC = () => {
                 onChange={(event) =>
                   setDraftFilters((current) => ({ ...current, city: event.target.value }))
                 }
-                placeholder="City / Commune / Locality"
+                placeholder={t('City / Commune / Locality')}
                 className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
               />
             </label>
@@ -375,19 +378,19 @@ const CustomerExplore: React.FC = () => {
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
-              <option value="">All categories</option>
+              <option value="">{t('All categories')}</option>
               {rootCategories.map((category) => (
                 <option key={category.id} value={category.slug || category.id}>
-                  {category.name}
+                  {t(category.name)}
                 </option>
               ))}
             </select>
 
             <button
               onClick={() => executeSearch(draftFilters)}
-              className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700"
+              className="psp-button psp-button--primary"
             >
-              Search
+              {t('Search')}
             </button>
           </div>
 
@@ -399,10 +402,10 @@ const CustomerExplore: React.FC = () => {
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
-              <option value="">All marketplace regions</option>
+              <option value="">{t('All marketplace regions')}</option>
               {MARKET_REGIONS.map((region) => (
                 <option key={region} value={region}>
-                  {region}
+                  {t(region)}
                 </option>
               ))}
             </select>
@@ -414,10 +417,10 @@ const CustomerExplore: React.FC = () => {
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
-              <option value="">All wilayas</option>
+              <option value="">{t('All wilayas')}</option>
               {ALGERIA_WILAYAS.map((wilaya) => (
                 <option key={wilaya} value={wilaya}>
-                  {wilaya}
+                  {t(wilaya)}
                 </option>
               ))}
             </select>
@@ -426,11 +429,12 @@ const CustomerExplore: React.FC = () => {
 
         <div className="psp-surface">
           <div className="psp-surface__header">
-            <div>
-              <h2>Active search</h2>
+          <div>
+              <h2>{t('Active search')}</h2>
               <div className="psp-surface__sub">
-                The current URL already preserves filters and ranking. Adjust, search, and share
-                the same state without losing context.
+                {t(
+                  'The current URL already preserves filters and ranking. Adjust, search, and share the same state without losing context.'
+                )}
               </div>
             </div>
             <button
@@ -438,31 +442,31 @@ const CustomerExplore: React.FC = () => {
               className="psp-button psp-button--secondary"
               onClick={resetFilters}
             >
-              Reset
+              {t('Reset')}
             </button>
           </div>
 
           <div className="psp-detail-grid">
             <div className="psp-detail-item">
-              <div className="psp-detail-item__label">Query</div>
+              <div className="psp-detail-item__label">{t('Query')}</div>
               <div className="psp-detail-item__value">
-                {activeFilters.query || 'Any service need'}
+                {activeFilters.query || t('Any service need')}
               </div>
             </div>
             <div className="psp-detail-item">
-              <div className="psp-detail-item__label">Local focus</div>
+              <div className="psp-detail-item__label">{t('Local focus')}</div>
               <div className="psp-detail-item__value">
-                {activeLocationLabel || 'All Algeria'}
+                {activeLocationLabel || t('All Algeria')}
               </div>
             </div>
             <div className="psp-detail-item">
-              <div className="psp-detail-item__label">Category</div>
+              <div className="psp-detail-item__label">{t('Category')}</div>
               <div className="psp-detail-item__value">
-                {selectedCategoryName || 'All categories'}
+                {selectedCategoryName || t('All categories')}
               </div>
             </div>
             <div className="psp-detail-item">
-              <div className="psp-detail-item__label">Ranking</div>
+              <div className="psp-detail-item__label">{t('Ranking')}</div>
               <div className="psp-detail-item__value capitalize">{activeFilters.sort}</div>
             </div>
           </div>
@@ -472,22 +476,23 @@ const CustomerExplore: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Filters and ranking</h2>
+            <h2>{t('Filters and ranking')}</h2>
             <div className="psp-surface__sub">
-              Narrow the visible provider set first, then switch ranking once the shortlist is
-              close to the right scope.
+              {t(
+                'Narrow the visible provider set first, then switch ranking once the shortlist is close to the right scope.'
+              )}
             </div>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">
             <Filter size={14} />
-            {rankedProviders.length} provider{rankedProviders.length === 1 ? '' : 's'}
+            {rankedProviders.length} {t(rankedProviders.length === 1 ? 'provider' : 'providers')}
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
           <div>
             <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Categories
+              {t('Categories')}
             </div>
             <div className="psp-chip-row">
               <button
@@ -495,7 +500,7 @@ const CustomerExplore: React.FC = () => {
                 className={`psp-chip ${!activeCategoryId ? 'psp-chip--active' : ''}`}
                 onClick={() => executeSearch({ ...activeFilters, category: '' })}
               >
-                All categories
+                {t('All categories')}
               </button>
               {rootCategories.map((category) => {
                 const isActive = selectedRootCategoryId === category.id;
@@ -512,7 +517,7 @@ const CustomerExplore: React.FC = () => {
                       })
                     }
                   >
-                    {category.name}
+                    {t(category.name)}
                   </button>
                 );
               })}
@@ -521,7 +526,7 @@ const CustomerExplore: React.FC = () => {
             {selectedRootCategoryId && branchSubcategories.length ? (
               <>
                 <div className="mb-3 mt-5 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  Subcategories
+                  {t('Subcategories')}
                 </div>
                 <div className="psp-chip-row">
                   <button
@@ -536,7 +541,7 @@ const CustomerExplore: React.FC = () => {
                       })
                     }
                   >
-                    All in this main category
+                    {t('All in this main category')}
                   </button>
                   {branchSubcategories.map((category) => {
                     const isActive = activeCategoryId === category.id;
@@ -553,7 +558,7 @@ const CustomerExplore: React.FC = () => {
                           })
                         }
                       >
-                        {category.label}
+                        {t(category.label)}
                       </button>
                     );
                   })}
@@ -564,13 +569,13 @@ const CustomerExplore: React.FC = () => {
 
           <div>
             <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Sort by
+              {t('Sort by')}
             </div>
             <div className="psp-chip-row">
               {[
-                { key: 'featured', label: 'Featured first' },
-                { key: 'verified', label: 'Verified first' },
-                { key: 'rating', label: 'Highest rated' },
+                { key: 'featured', label: t('Featured first') },
+                { key: 'verified', label: t('Verified first') },
+                { key: 'rating', label: t('Highest rated') },
               ].map((sortOption) => (
                 <button
                   key={sortOption.key}
@@ -605,28 +610,30 @@ const CustomerExplore: React.FC = () => {
           </div>
         ) : error ? (
           <div className="psp-error-state">
-            <div className="font-bold">Discovery search failed.</div>
+            <div className="font-bold">{t('Discovery search failed.')}</div>
             <div>{error}</div>
             <button
               type="button"
               className="psp-button psp-button--primary mt-4"
               onClick={() => executeSearch(activeFilters)}
             >
-              Retry search
+              {t('Retry search')}
             </button>
           </div>
         ) : rankedProviders.length === 0 ? (
           <div className="psp-empty-state">
-            <div className="font-bold text-slate-700">No providers matched the current filters.</div>
+            <div className="font-bold text-slate-700">
+              {t('No providers matched the current filters.')}
+            </div>
             <div>
-              Try removing the local filters or search with broader service terms.
+              {t('Try removing the local filters or search with broader service terms.')}
             </div>
             <button
               type="button"
               className="psp-button psp-button--secondary mt-4"
               onClick={resetFilters}
             >
-              Clear filters
+              {t('Clear filters')}
             </button>
           </div>
         ) : (
@@ -647,7 +654,7 @@ const CustomerExplore: React.FC = () => {
                   <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                     {provider.featuredOnHomepage ? (
                       <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white">
-                        Featured
+                        {t('Featured')}
                       </span>
                     ) : null}
                     {provider.profileBadgeText ? (
@@ -669,7 +676,7 @@ const CustomerExplore: React.FC = () => {
                           <MapPin size={14} />
                           {[provider.city, provider.wilaya, provider.region]
                             .filter(Boolean)
-                            .join(', ') || 'Algeria'}
+                            .join(', ') || t('Algeria')}
                         </span>
                         {provider.serviceCoverage?.label ? (
                           <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
@@ -679,14 +686,14 @@ const CustomerExplore: React.FC = () => {
                         {provider.isVerified ? (
                           <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">
                             <BadgeCheck size={14} />
-                            Verified
+                            {t('Verified')}
                           </span>
                         ) : null}
                       </div>
                     </div>
                     <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
                       <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                        Rating
+                        {t('Rating')}
                       </div>
                       <div className="mt-1 flex items-center gap-2 text-lg font-black text-slate-900">
                         <Star size={16} fill="currentColor" className="text-amber-400" />
@@ -697,25 +704,27 @@ const CustomerExplore: React.FC = () => {
 
                   <div className="psp-summary-strip">
                     <span className="psp-summary-chip">
-                      <strong>{provider.primaryCategory?.name || 'General services'}</strong>
-                      category
+                      <strong>{provider.primaryCategory?.name || t('General services')}</strong>
+                      {t('category')}
                     </span>
                     <span className="psp-summary-chip">
                       <strong>{Number(provider.reviewsCount || 0)}</strong>
-                      reviews
+                      {t('reviews')}
                     </span>
                     <span className="psp-summary-chip">
                       <Clock3 size={14} />
-                      <strong>{provider.responseTimeMinutes || 0} min</strong>
-                      first reply
+                      <strong>
+                        {provider.responseTimeMinutes || 0} {t('min')}
+                      </strong>
+                      {t('first reply')}
                     </span>
                     <span className="psp-summary-chip">
-                      <strong>{provider.serviceCoverage?.label || 'Declared on profile'}</strong>
-                      reach
+                      <strong>{provider.serviceCoverage?.label || t('Declared on profile')}</strong>
+                      {t('reach')}
                     </span>
                     <span className="psp-summary-chip">
-                      <strong>{provider.yearsOfExperience || 0} years</strong>
-                      experience
+                      <strong>{provider.yearsOfExperience || 0} {t('years')}</strong>
+                      {t('experience')}
                     </span>
                   </div>
 
@@ -726,7 +735,7 @@ const CustomerExplore: React.FC = () => {
                     <div className="flex flex-wrap gap-2">
                       {(provider.servicesPreview?.length
                         ? provider.servicesPreview
-                        : [{ id: `${provider.id}-fallback`, name: 'Open provider profile for services' }]
+                        : [{ id: `${provider.id}-fallback`, name: t('Open provider profile for services') }]
                       ).map((service) => (
                         <span key={service.id} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">
                           {service.name}
@@ -737,7 +746,7 @@ const CustomerExplore: React.FC = () => {
 
                   <div className="flex flex-wrap gap-3 pt-2">
                     <Link to={`/providers/${provider.id}`} className="psp-button psp-button--primary">
-                      View profile
+                      {t('View profile')}
                       <ArrowRight size={16} />
                     </Link>
                     <button
@@ -746,14 +755,14 @@ const CustomerExplore: React.FC = () => {
                       onClick={() => openIntentFlow(provider.id, 'message')}
                     >
                       <MessageCircle size={16} />
-                      Message
+                      {t('Message')}
                     </button>
                     <button
                       type="button"
                       className="psp-button psp-button--secondary"
                       onClick={() => openIntentFlow(provider.id, 'request')}
                     >
-                      Request service
+                      {t('Request service')}
                     </button>
                     <a
                       href={buildGoogleMapsSearchUrl(
@@ -763,7 +772,7 @@ const CustomerExplore: React.FC = () => {
                       rel="noreferrer"
                       className="psp-control-pill"
                     >
-                      Open map
+                      {t('Open map')}
                     </a>
                   </div>
                 </div>

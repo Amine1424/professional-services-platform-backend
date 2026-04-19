@@ -307,7 +307,7 @@ const CustomerOrders: React.FC = () => {
         <aside className="psp-surface xl:sticky xl:top-6 xl:self-start">
           <div className="psp-surface__header">
             <div>
-              <h2>Your requests</h2>
+              <h2>{t('Your requests')}</h2>
               <div className="psp-surface__sub">
                 {t('Keep one focused shortlist of all request workflows.')}
               </div>
@@ -351,7 +351,7 @@ const CustomerOrders: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-black text-slate-900">
-                          {item.subject || item.service?.name || 'Service request'}
+                          {item.subject || item.service?.name || t('Service request')}
                         </div>
                         <div className="mt-1 truncate text-xs text-slate-500">
                           {item.provider.companyName}
@@ -398,7 +398,7 @@ const CustomerOrders: React.FC = () => {
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-[28px] font-black tracking-tight text-slate-900">
-                          {selected.subject || selected.service?.name || 'Service request'}
+                          {selected.subject || selected.service?.name || t('Service request')}
                         </h2>
                         <RequestStatusBadge status={selected.status} />
                       </div>
@@ -412,7 +412,7 @@ const CustomerOrders: React.FC = () => {
                             <span>•</span>
                             <span className="inline-flex items-center gap-1 text-emerald-700">
                               <CheckCircle2 size={14} />
-                              Verified
+                              {t('Verified')}
                             </span>
                           </>
                         ) : null}
@@ -483,7 +483,7 @@ const CustomerOrders: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Request summary</h2>
+                      <h2>{t('Request summary')}</h2>
                       <div className="psp-surface__sub">
                         {t('Original request details, provider response, and what happens next.')}
                       </div>
@@ -519,7 +519,7 @@ const CustomerOrders: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Lifecycle</h2>
+                      <h2>{t('Lifecycle')}</h2>
                       <div className="psp-surface__sub">
                         {t('A clean visual view of the current stage.')}
                       </div>
@@ -587,7 +587,7 @@ const CustomerOrders: React.FC = () => {
               <article className="psp-surface">
                 <div className="psp-surface__header">
                   <div>
-                      <h2>Your notes and decisions</h2>
+                      <h2>{t('Your notes and decisions')}</h2>
                       <div className="psp-surface__sub">
                         {t('Keep a note, then take the right customer-side action.')}
                       </div>

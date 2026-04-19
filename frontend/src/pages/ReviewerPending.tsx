@@ -187,7 +187,7 @@ const ReviewerPending: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Queue filters</h2>
+            <h2>{t('Queue filters')}</h2>
             <div className="psp-surface__sub">
               {t('Search by provider, owner, category, or location before opening a record.')}
             </div>
@@ -223,7 +223,7 @@ const ReviewerPending: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="psp-list-card__title">{item.companyName}</h3>
                     <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-amber-700">
-                      {item.status || 'pending'}
+                      {item.status || t('pending')}
                     </span>
                     {item.isVerified ? (
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
@@ -236,7 +236,7 @@ const ReviewerPending: React.FC = () => {
                     {t('years experience')} | {item.servicesCount} {t(item.servicesCount === 1 ? 'service' : 'services')}
                   </div>
                   <div className="psp-list-card__meta">
-                    {[item.city, item.wilaya, item.region].filter(Boolean).join(', ') || 'Algeria'}
+                    {[item.city, item.wilaya, item.region].filter(Boolean).join(', ') || t('Algeria')}
                   </div>
                   <div className="psp-list-card__meta">
                     {item.owner.firstName} {item.owner.lastName} | {item.owner.email}

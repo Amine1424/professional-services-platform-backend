@@ -139,8 +139,8 @@ const AdminProviders: React.FC = () => {
     const secondaryLabel = [
       `${item.owner.firstName} ${item.owner.lastName}`.trim(),
       item.owner.email,
-      item.primaryCategory?.name || 'Category pending',
-      [item.city, item.wilaya, item.region].filter(Boolean).join(', ') || 'Algeria',
+      item.primaryCategory?.name || t('Category pending'),
+      [item.city, item.wilaya, item.region].filter(Boolean).join(', ') || t('Algeria'),
     ]
       .filter(Boolean)
       .join(' | ');
@@ -233,7 +233,7 @@ const AdminProviders: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Provider queue filters</h2>
+            <h2>{t('Provider queue filters')}</h2>
             <div className="psp-surface__sub">
               {t('Filter before acting so verification and featuring decisions stay deliberate.')}
             </div>
@@ -289,7 +289,7 @@ const AdminProviders: React.FC = () => {
         <section className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Provider moderation queue</h2>
+              <h2>{t('Provider moderation queue')}</h2>
               <div className="psp-surface__sub">
                 {t('Use direct actions on each row to approve, reject, verify, feature, or update badge text.')}
               </div>
@@ -327,7 +327,7 @@ const AdminProviders: React.FC = () => {
                             statusToneMap[item.status] || 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {item.status}
+                          {t(item.status)}
                         </span>
                       </div>
                       <div className="psp-data-table__sub">

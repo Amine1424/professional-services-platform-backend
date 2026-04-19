@@ -187,7 +187,7 @@ const CustomerHome: React.FC = () => {
               )}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/customer/explore" className="psp-button bg-white text-slate-900">
+              <Link to="/customer/explore" className="psp-button psp-button--secondary">
                 {t('Explore providers')}
                 <ArrowRight size={16} />
               </Link>
@@ -246,7 +246,7 @@ const CustomerHome: React.FC = () => {
       <section className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Stories</h2>
+            <h2>{t('Stories')}</h2>
             <div className="psp-surface__sub">
               {t('Click a story to view it, then reply directly into the conversation.')}
             </div>
@@ -291,7 +291,7 @@ const CustomerHome: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Recent review signals</h2>
+              <h2>{t('Recent review signals')}</h2>
             </div>
           </div>
 
@@ -336,7 +336,7 @@ const CustomerHome: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Service cards ready for conversion</h2>
+              <h2>{t('Service cards ready for conversion')}</h2>
             </div>
           </div>
 

@@ -3,6 +3,7 @@ import { Heart, MapPin, MessageCircle, Quote, Sparkles, Star, Trash2 } from 'luc
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../config/api';
+import { useI18n } from '../i18n';
 import '../styles/app-primitives.css';
 
 interface FavoriteProvider {
@@ -25,6 +26,7 @@ const fallbackAvatar =
   'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
 
 const CustomerFavorites: React.FC = () => {
+  const { t } = useI18n();
   const [items, setItems] = useState<FavoriteProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,12 +41,12 @@ const CustomerFavorites: React.FC = () => {
     } catch (requestError: any) {
       setItems([]);
       setError(
-        requestError?.response?.data?.message || 'Failed to load favorite providers.'
+        requestError?.response?.data?.message || t('Failed to load favorite providers.')
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -55,11 +57,11 @@ const CustomerFavorites: React.FC = () => {
       setRemovingId(providerId);
       await api.delete(`/favorites/providers/${providerId}`);
       setItems((current) => current.filter((provider) => provider.id !== providerId));
-      toast.success('Provider removed from favorites.');
+      toast.success(t('Provider removed from favorites.'));
     } catch (requestError: any) {
       toast.error(
         requestError?.response?.data?.message ||
-          'Failed to remove provider from favorites.'
+          t('Failed to remove provider from favorites.')
       );
     } finally {
       setRemovingId(null);
@@ -77,22 +79,22 @@ const CustomerFavorites: React.FC = () => {
 
     return [
       {
-        label: 'Saved providers',
+        label: t('Saved providers'),
         value: String(items.length),
-        caption: 'Your active shortlist for future comparison and follow-up.',
+        caption: t('Your active shortlist for future comparison and follow-up.'),
       },
       {
-        label: 'Verified providers',
+        label: t('Verified providers'),
         value: String(verifiedCount),
-        caption: 'Saved providers that already carry marketplace trust signals.',
+        caption: t('Saved providers that already carry marketplace trust signals.'),
       },
       {
-        label: 'Average shortlist rating',
+        label: t('Average shortlist rating'),
         value: averageRating,
-        caption: 'A quick quality signal across the providers you saved.',
+        caption: t('A quick quality signal across the providers you saved.'),
       },
     ];
-  }, [items]);
+  }, [items, t]);
 
   const featuredShortlistItem = useMemo(() => {
     return (
@@ -126,7 +128,7 @@ const CustomerFavorites: React.FC = () => {
   if (error) {
     return (
       <div className="psp-error-state">
-        <div className="font-bold">Favorites unavailable.</div>
+        <div className="font-bold">{t('Favorites unavailable.')}</div>
         <div>{error}</div>
       </div>
     );
@@ -139,28 +141,28 @@ const CustomerFavorites: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold tracking-[0.14em] text-white/90">
               <Heart size={14} />
-              Shortlist workspace
+              {t('Shortlist workspace')}
             </div>
             <h2 className="mt-5 text-[34px] font-black tracking-tight md:text-[42px]">
-              Keep the providers worth returning to
+              {t('Keep the providers worth returning to')}
             </h2>
             <p className="mt-4 max-w-[620px] text-[15px] leading-8 text-white/82">
-              Favorites should reduce decision friction. From here you can reopen the profile, start
-              a conversation, create a request, or clean the shortlist when a provider is no longer
-              relevant.
+              {t(
+                'Favorites should reduce decision friction. From here you can reopen the profile, start a conversation, create a request, or clean the shortlist when a provider is no longer relevant.'
+              )}
             </p>
           </div>
 
           <div className="grid gap-4 rounded-[28px] bg-white/10 p-4 backdrop-blur">
             <div className="grid gap-4 md:grid-cols-2">
               {[
-                ['Saved now', String(items.length)],
+                [t('Saved now'), String(items.length)],
                 [
-                  'Verified inside shortlist',
+                  t('Verified inside shortlist'),
                   String(items.filter((item) => item.isVerified).length),
                 ],
-                ['Ready to message', String(items.length)],
-                ['Ready to request', String(items.length)],
+                [t('Ready to message'), String(items.length)],
+                [t('Ready to request'), String(items.length)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-[22px] bg-white/10 p-4">
                   <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">
@@ -189,19 +191,20 @@ const CustomerFavorites: React.FC = () => {
           <div>
             <h2>Saved providers</h2>
             <div className="psp-surface__sub">
-              This is a working shortlist, not a passive list. Every card can move directly into
-              action.
+              {t(
+                'This is a working shortlist, not a passive list. Every card can move directly into action.'
+              )}
             </div>
           </div>
           <Link to="/customer/explore" className="psp-button psp-button--primary">
-            Explore more providers
+            {t('Explore more providers')}
           </Link>
         </div>
 
         <div className="mb-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-[24px] bg-slate-50 p-5">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Best shortlist signal
+              {t('Best shortlist signal')}
             </div>
             {featuredShortlistItem ? (
               <>
@@ -209,36 +212,34 @@ const CustomerFavorites: React.FC = () => {
                   {featuredShortlistItem.companyName}
                 </div>
                 <div className="mt-2 text-sm leading-7 text-slate-600">
-                  Highest current rating in your saved shortlist. Use this as the fastest candidate
-                  when you want to reopen the pipeline now.
+                  {t(
+                    'Highest current rating in your saved shortlist. Use this as the fastest candidate when you want to reopen the pipeline now.'
+                  )}
                 </div>
                 <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
                   <Star size={14} fill="currentColor" />
-                  {Number(featuredShortlistItem.averageRating || 0).toFixed(1)} average rating
+                  {Number(featuredShortlistItem.averageRating || 0).toFixed(1)}{' '}
+                  {t('average rating')}
                 </div>
               </>
             ) : (
               <div className="mt-3 text-sm text-slate-600">
-                Save providers from Explore to build a usable shortlist.
+                {t('Save providers from Explore to build a usable shortlist.')}
               </div>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3 rounded-[24px] bg-slate-50 p-5">
+          <div className="psp-control-bar rounded-[24px]">
             {[
-              ['all', 'All shortlist'],
-              ['verified', 'Verified only'],
-              ['top_rated', 'Top rated'],
+              ['all', t('All shortlist')],
+              ['verified', t('Verified only')],
+              ['top_rated', t('Top rated')],
             ].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setFilter(key as 'all' | 'verified' | 'top_rated')}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                  filter === key
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-600 shadow-[0_10px_24px_rgba(15,23,42,0.04)]'
-                }`}
+                className={`psp-control-pill ${filter === key ? 'psp-control-pill--active' : ''}`}
               >
                 {label}
               </button>
@@ -248,19 +249,19 @@ const CustomerFavorites: React.FC = () => {
 
         {!items.length ? (
           <div className="psp-empty-state">
-            <div className="font-bold">No providers saved yet.</div>
+            <div className="font-bold">{t('No providers saved yet.')}</div>
             <div className="mt-2">
-              Use Explore to save providers you want to compare or contact later.
+              {t('Use Explore to save providers you want to compare or contact later.')}
             </div>
             <Link to="/customer/explore" className="psp-button psp-button--primary mt-5">
-              Open Explore
+              {t('Open Explore')}
             </Link>
           </div>
         ) : !filteredItems.length ? (
           <div className="psp-empty-state">
-            <div className="font-bold">No providers match this shortlist filter.</div>
+            <div className="font-bold">{t('No providers match this shortlist filter.')}</div>
             <div className="mt-2">
-              Try another filter to reopen the rest of your saved providers.
+              {t('Try another filter to reopen the rest of your saved providers.')}
             </div>
           </div>
         ) : (
@@ -268,7 +269,7 @@ const CustomerFavorites: React.FC = () => {
             {filteredItems.map((provider) => {
               const location =
                 [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') ||
-                'Algeria';
+                t('Algeria');
 
               return (
                 <article
@@ -291,7 +292,7 @@ const CustomerFavorites: React.FC = () => {
                       {provider.isVerified ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/90 px-3 py-1 text-xs font-bold text-slate-900">
                           <Sparkles size={12} />
-                          Verified
+                          {t('Verified')}
                         </span>
                       ) : null}
                     </div>
@@ -320,9 +321,11 @@ const CustomerFavorites: React.FC = () => {
                     <div className="mt-5 flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-600">
                       <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
                         <Star size={14} fill="currentColor" />
-                        {Number(provider.averageRating || 0).toFixed(1)} rating
+                        {Number(provider.averageRating || 0).toFixed(1)} {t('rating')}
                       </span>
-                      <span>{Number(provider.reviewsCount || 0)} reviews</span>
+                      <span>
+                        {Number(provider.reviewsCount || 0)} {t('reviews')}
+                      </span>
                     </div>
 
                     <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -330,21 +333,21 @@ const CustomerFavorites: React.FC = () => {
                         to={`/providers/${provider.id}`}
                         className="psp-button psp-button--primary"
                       >
-                        Open profile
+                        {t('Open profile')}
                       </Link>
                       <Link
                         to={`/providers/${provider.id}?intent=message`}
                         className="psp-button psp-button--secondary"
                       >
                         <MessageCircle size={16} />
-                        Message
+                        {t('Message')}
                       </Link>
                       <Link
                         to={`/providers/${provider.id}?intent=request`}
                         className="psp-button psp-button--secondary"
                       >
                         <Quote size={16} />
-                        Request service
+                        {t('Request service')}
                       </Link>
                       <button
                         type="button"
@@ -353,7 +356,7 @@ const CustomerFavorites: React.FC = () => {
                         onClick={() => removeFavorite(provider.id)}
                       >
                         <Trash2 size={16} />
-                        {removingId === provider.id ? 'Removing...' : 'Remove favorite'}
+                        {removingId === provider.id ? t('Removing...') : t('Remove favorite')}
                       </button>
                     </div>
                   </div>

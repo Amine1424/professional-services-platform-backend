@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Clock3, Sparkles, Tag } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { PublicProviderPayload } from './types';
 
 interface ProviderServicesSectionProps {
@@ -13,6 +14,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
   onRequest,
   onExploreCategory,
 }) => {
+  const { t } = useI18n();
   const spotlightService = useMemo(() => {
     return services.find((service) => service.isFeatured) || services[0] || null;
   }, [services]);
@@ -26,15 +28,19 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
     <section id="provider-services" className="psp-surface">
       <div className="psp-surface__header">
         <div>
-          <h2>Published services</h2>
+          <h2>{t('Published services')}</h2>
           <div className="psp-surface__sub">
-            These offers can be requested directly from the profile and are structured for quick customer comparison.
+            {t(
+              'These offers can be requested directly from the profile and are structured for quick customer comparison.'
+            )}
           </div>
         </div>
       </div>
 
       {!services.length ? (
-        <div className="psp-empty-state">No published services are visible on this profile yet.</div>
+        <div className="psp-empty-state">
+          {t('No published services are visible on this profile yet.')}
+        </div>
       ) : (
         <div className="grid gap-5">
           {spotlightService ? (
@@ -42,7 +48,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Spotlight service
+                    {t('Spotlight service')}
                   </div>
                   <div className="mt-3 text-[30px] font-black tracking-tight text-slate-900">
                     {spotlightService.name}
@@ -54,25 +60,25 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
 
                 <div className="rounded-[22px] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
                   <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Starting point
+                    {t('Starting point')}
                   </div>
                   <div className="mt-2 text-[24px] font-black text-slate-900">
                     {spotlightService.price
                       ? `${spotlightService.price} ${spotlightService.currencyCode}`
-                      : 'Price on request'}
+                      : t('Price on request')}
                   </div>
                 </div>
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  {spotlightService.category?.name || 'No category'}
+                  {spotlightService.category?.name || t('No category')}
                 </span>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
                   {spotlightService.deliveryMode}
                 </span>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  Reply in {spotlightService.responseTimeHours}h
+                  {t('Reply in')} {spotlightService.responseTimeHours}h
                 </span>
                 {spotlightService.showPromoBadge && spotlightService.promoBadgeText ? (
                   <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
@@ -91,7 +97,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
                   <h3 className="psp-card__title">{service.name}</h3>
                   {service.isFeatured ? (
                     <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                      Featured
+                      {t('Featured')}
                     </span>
                   ) : null}
                   {service.showPromoBadge && service.promoBadgeText ? (
@@ -102,7 +108,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
                 </div>
 
                 <div className="psp-card__meta">
-                  {service.category?.name || 'No category'} | {service.deliveryMode}
+                  {service.category?.name || t('No category')} | {service.deliveryMode}
                 </div>
                 <div className="psp-card__description">{service.description}</div>
 
@@ -110,11 +116,13 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
                   <div className="flex flex-wrap gap-2">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                       <Tag size={12} />
-                      {service.price ? `${service.price} ${service.currencyCode}` : 'Price on request'}
+                      {service.price
+                        ? `${service.price} ${service.currencyCode}`
+                        : t('Price on request')}
                     </span>
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                       <Clock3 size={12} />
-                      Reply in {service.responseTimeHours}h
+                      {t('Reply in')} {service.responseTimeHours}h
                     </span>
                   </div>
                 </div>
@@ -125,7 +133,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
                     className="psp-button psp-button--primary"
                     onClick={() => onRequest(service.id, service.name)}
                   >
-                    Request this service
+                    {t('Request this service')}
                   </button>
                   {service.category?.slug ? (
                     <button
@@ -134,7 +142,7 @@ const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
                       onClick={() => onExploreCategory(service.category!.slug)}
                     >
                       <Sparkles size={16} />
-                      Similar providers
+                      {t('Similar providers')}
                     </button>
                   ) : null}
                 </div>

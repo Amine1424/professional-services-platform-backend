@@ -3,6 +3,7 @@ import { MessageSquareText, Star, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../config/api';
+import { useI18n } from '../i18n';
 import '../styles/app-primitives.css';
 
 interface ReviewItem {
@@ -22,6 +23,7 @@ const fallbackAvatar =
   'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
 
 const CustomerReviews: React.FC = () => {
+  const { t } = useI18n();
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,11 +37,11 @@ const CustomerReviews: React.FC = () => {
       setError(null);
     } catch (requestError: any) {
       setItems([]);
-      setError(requestError.response?.data?.message || 'Failed to load your reviews.');
+      setError(requestError.response?.data?.message || t('Failed to load your reviews.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -50,9 +52,9 @@ const CustomerReviews: React.FC = () => {
       setDeletingId(id);
       await api.delete(`/provider-reviews/${id}`);
       setItems((current) => current.filter((review) => review.id !== id));
-      toast.success('Review deleted.');
+      toast.success(t('Review deleted.'));
     } catch (requestError: any) {
-      toast.error(requestError.response?.data?.message || 'Failed to delete review.');
+      toast.error(requestError.response?.data?.message || t('Failed to delete review.'));
     } finally {
       setDeletingId(null);
     }
@@ -68,22 +70,22 @@ const CustomerReviews: React.FC = () => {
 
     return [
       {
-        label: 'Published reviews',
+        label: t('Published reviews'),
         value: String(items.length),
-        caption: 'Reviews you have written across provider profiles.',
+        caption: t('Reviews you have written across provider profiles.'),
       },
       {
-        label: 'Average rating given',
+        label: t('Average rating given'),
         value: average,
-        caption: 'A simple view of how demanding your public feedback has been.',
+        caption: t('A simple view of how demanding your public feedback has been.'),
       },
       {
-        label: 'With written comments',
+        label: t('With written comments'),
         value: String(items.filter((item) => Boolean(item.comment?.trim())).length),
-        caption: 'Reviews that include context beyond the star rating.',
+        caption: t('Reviews that include context beyond the star rating.'),
       },
     ];
-  }, [items]);
+  }, [items, t]);
 
   const filteredItems = useMemo(() => {
     if (filter === 'with_comment') {
@@ -116,7 +118,7 @@ const CustomerReviews: React.FC = () => {
   if (error) {
     return (
       <div className="psp-error-state">
-        <div className="font-bold">Reviews unavailable.</div>
+        <div className="font-bold">{t('Reviews unavailable.')}</div>
         <div>{error}</div>
       </div>
     );
@@ -129,23 +131,25 @@ const CustomerReviews: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold tracking-[0.14em] text-white/90">
               <MessageSquareText size={14} />
-              Review history
+              {t('Review history')}
             </div>
             <h2 className="mt-5 text-[34px] font-black tracking-tight md:text-[42px]">
-              Manage the feedback you have already published
+              {t('Manage the feedback you have already published')}
             </h2>
             <p className="mt-4 max-w-[620px] text-[15px] leading-8 text-white/82">
-              Reviews shape public trust and discovery ranking. From here you can reopen the provider profile or delete feedback that is no longer accurate.
+              {t(
+                'Reviews shape public trust and discovery ranking. From here you can reopen the provider profile or delete feedback that is no longer accurate.'
+              )}
             </p>
           </div>
 
           <div className="grid gap-4 rounded-[28px] bg-white/10 p-4 backdrop-blur">
             <div className="grid gap-4 md:grid-cols-2">
               {[
-                ['Total reviews', String(items.length)],
-                ['Providers reviewed', String(new Set(items.map((item) => item.providerId)).size)],
-                ['Ratings given', items.length ? 'Active' : 'None yet'],
-                ['Delete control', 'Available'],
+                [t('Total reviews'), String(items.length)],
+                [t('Providers reviewed'), String(new Set(items.map((item) => item.providerId)).size)],
+                [t('Ratings given'), items.length ? t('Active') : t('None yet')],
+                [t('Delete control'), t('Available')],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-[22px] bg-white/10 p-4">
                   <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">{label}</div>
@@ -172,47 +176,47 @@ const CustomerReviews: React.FC = () => {
           <div>
             <h2>Your published reviews</h2>
             <div className="psp-surface__sub">
-              Open the provider profile to add new feedback in context, or remove an outdated review directly from here.
+              {t(
+                'Open the provider profile to add new feedback in context, or remove an outdated review directly from here.'
+              )}
             </div>
           </div>
           <Link to="/customer/explore" className="psp-button psp-button--primary">
-            Explore providers
+            {t('Explore providers')}
           </Link>
         </div>
 
         <div className="mb-5 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
           <div className="rounded-[24px] bg-slate-50 p-5">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Rating distribution
+              {t('Rating distribution')}
             </div>
             <div className="mt-4 grid gap-3">
               {ratingDistribution.map((item) => (
                 <div key={item.rating} className="flex items-center justify-between gap-4 rounded-[18px] bg-white px-4 py-3">
                   <div className="inline-flex items-center gap-2 font-bold text-slate-700">
                     <Star size={14} fill="currentColor" className="text-amber-500" />
-                    {item.rating} stars
+                    {item.rating} {t('stars')}
                   </div>
-                  <div className="text-sm font-semibold text-slate-500">{item.count} reviews</div>
+                  <div className="text-sm font-semibold text-slate-500">
+                    {item.count} {t('reviews')}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3 rounded-[24px] bg-slate-50 p-5">
+          <div className="psp-control-bar rounded-[24px]">
             {[
-              ['all', 'All reviews'],
-              ['with_comment', 'With comments'],
-              ['high_rating', '4 stars and above'],
+              ['all', t('All reviews')],
+              ['with_comment', t('With comments')],
+              ['high_rating', t('4 stars and above')],
             ].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setFilter(key as 'all' | 'with_comment' | 'high_rating')}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                  filter === key
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-600 shadow-[0_10px_24px_rgba(15,23,42,0.04)]'
-                }`}
+                className={`psp-control-pill ${filter === key ? 'psp-control-pill--active' : ''}`}
               >
                 {label}
               </button>
@@ -222,21 +226,25 @@ const CustomerReviews: React.FC = () => {
 
         {!items.length ? (
           <div className="psp-empty-state">
-            <div className="font-bold">You have not published any reviews yet.</div>
-            <div className="mt-2">Open a provider profile from Explore when you want to leave public feedback.</div>
+            <div className="font-bold">{t('You have not published any reviews yet.')}</div>
+            <div className="mt-2">
+              {t('Open a provider profile from Explore when you want to leave public feedback.')}
+            </div>
             <Link to="/customer/explore" className="psp-button psp-button--primary mt-5">
-              Open Explore
+              {t('Open Explore')}
             </Link>
           </div>
         ) : !filteredItems.length ? (
           <div className="psp-empty-state">
-            <div className="font-bold">No reviews match this filter.</div>
-            <div className="mt-2">Switch filters to inspect the rest of your published feedback.</div>
+            <div className="font-bold">{t('No reviews match this filter.')}</div>
+            <div className="mt-2">
+              {t('Switch filters to inspect the rest of your published feedback.')}
+            </div>
           </div>
         ) : (
           <div className="psp-list">
             {filteredItems.map((review) => {
-              const providerName = review.provider?.companyName || 'Provider';
+              const providerName = review.provider?.companyName || t('Provider');
 
               return (
                 <article key={review.id} className="psp-list-card">
@@ -267,7 +275,7 @@ const CustomerReviews: React.FC = () => {
 
                     <div className="psp-list-card__actions">
                       <Link to={`/providers/${review.providerId}`} className="psp-button psp-button--secondary">
-                        Open provider
+                        {t('Open provider')}
                       </Link>
                       <button
                         type="button"
@@ -276,13 +284,13 @@ const CustomerReviews: React.FC = () => {
                         onClick={() => removeReview(review.id)}
                       >
                         <Trash2 size={16} />
-                        {deletingId === review.id ? 'Deleting...' : 'Delete'}
+                        {deletingId === review.id ? t('Deleting...') : t('Delete')}
                       </button>
                     </div>
                   </div>
 
                   <div className="mt-4 rounded-[20px] bg-slate-50 p-4 text-sm leading-8 text-slate-600">
-                    {review.comment?.trim() || 'No written comment was included with this review.'}
+                    {review.comment?.trim() || t('No written comment was included with this review.')}
                   </div>
                 </article>
               );

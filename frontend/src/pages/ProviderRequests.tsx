@@ -96,11 +96,11 @@ const getFlowState = (currentStatus?: string | null, stepKey?: string) => {
   return 'upcoming';
 };
 
-const getCustomerName = (item?: ProviderRequestItem | null) =>
-  `${item?.customer.firstName || ''} ${item?.customer.lastName || ''}`.trim() || 'Customer';
+const getCustomerName = (item?: ProviderRequestItem | null, fallback = 'Customer') =>
+  `${item?.customer.firstName || ''} ${item?.customer.lastName || ''}`.trim() || fallback;
 
-const getRequestHeading = (item?: ProviderRequestItem | null) =>
-  item?.subject || item?.service?.name || 'Service request';
+const getRequestHeading = (item?: ProviderRequestItem | null, fallback = 'Service request') =>
+  item?.subject || item?.service?.name || fallback;
 
 const getInitials = (value: string) =>
   value
@@ -201,8 +201,8 @@ const ProviderRequests: React.FC = () => {
   );
 
   const selectedStatusMeta = getRequestStatusMeta(selected?.status);
-  const selectedCustomerName = getCustomerName(selected);
-  const selectedRequestHeading = getRequestHeading(selected);
+  const selectedCustomerName = getCustomerName(selected, t('Customer'));
+  const selectedRequestHeading = getRequestHeading(selected, t('Service request'));
   const needsActionCount = items.filter((item) =>
     ['new', 'reviewed'].includes(item.status)
   ).length;
@@ -223,11 +223,11 @@ const ProviderRequests: React.FC = () => {
     return [
       {
         value: selected.status,
-        label: `${getRequestStatusMeta(selected.status).label} (Current)`,
+        label: `${getRequestStatusMeta(selected.status).label} (${t('Current')})`,
       },
       ...providerStatusOptions,
     ];
-  }, [selected?.status]);
+  }, [selected?.status, t]);
 
   useEffect(() => {
     if (!selected) return;
@@ -360,7 +360,7 @@ const ProviderRequests: React.FC = () => {
         <aside className="psp-surface xl:sticky xl:top-6 xl:self-start">
           <div className="psp-surface__header">
             <div>
-              <h2>Lead inbox</h2>
+              <h2>{t('Lead inbox')}</h2>
               <div className="psp-surface__sub">
                 {t('Keep one compact list of active briefs, quotes, and delivery updates.')}
               </div>
@@ -391,7 +391,7 @@ const ProviderRequests: React.FC = () => {
             <div className="grid gap-4">
               {filteredItems.map((item) => {
                 const isActive = selectedId === item.id;
-                const customerName = getCustomerName(item);
+                const customerName = getCustomerName(item, t('Customer'));
 
                 return (
                   <button
@@ -405,9 +405,9 @@ const ProviderRequests: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] bg-slate-100 text-sm font-black text-slate-700">
-                        {getInitials(customerName || 'CU')}
-                      </div>
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] bg-slate-100 text-sm font-black text-slate-700">
+                        {getInitials(customerName || t('CU'))}
+                    </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
@@ -423,7 +423,7 @@ const ProviderRequests: React.FC = () => {
                         </div>
 
                         <div className="mt-3 truncate text-sm font-semibold text-slate-800">
-                          {getRequestHeading(item)}
+                          {getRequestHeading(item, t('Service request'))}
                         </div>
 
                         <div
@@ -480,7 +480,7 @@ const ProviderRequests: React.FC = () => {
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="flex items-start gap-4">
                     <div className="inline-flex h-16 w-16 items-center justify-center rounded-[22px] bg-slate-100 text-lg font-black text-slate-700">
-                      {getInitials(selectedCustomerName || 'CU')}
+                      {getInitials(selectedCustomerName || t('CU'))}
                     </div>
 
                     <div>
@@ -568,7 +568,8 @@ const ProviderRequests: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Request brief</h2>
+                      <h2>{t('Request brief')}</h2>
+                      
                       <div className="psp-surface__sub">
                         {t('The customer summary, latest note, and service scope in one view.')}
                       </div>
@@ -623,7 +624,8 @@ const ProviderRequests: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Lifecycle</h2>
+                      <h2>{t('Lifecycle')}</h2>
+                      
                       <div className="psp-surface__sub">
                         {t('See where the request sits and what the customer sees next.')}
                       </div>
@@ -690,7 +692,8 @@ const ProviderRequests: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Customer context</h2>
+                      <h2>{t('Customer context')}</h2>
+                      
                       <div className="psp-surface__sub">
                         {t('Contact details and timing information for the current request.')}
                       </div>
@@ -753,7 +756,8 @@ const ProviderRequests: React.FC = () => {
                 <article className="psp-surface">
                   <div className="psp-surface__header">
                     <div>
-                      <h2>Quote and status controls</h2>
+                      <h2>{t('Quote and status controls')}</h2>
+                      
                       <div className="psp-surface__sub">
                         {t(
                           'Update the customer-facing status, attach a quote, and send the next clear response.'
@@ -783,7 +787,7 @@ const ProviderRequests: React.FC = () => {
                       >
                         {statusOptions.map((option) => (
                           <option key={option.value} value={option.value}>
-                            {option.label}
+                            {t(option.label)}
                           </option>
                         ))}
                       </select>

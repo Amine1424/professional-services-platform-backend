@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Globe, Lock, PlayCircle, Sparkles } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { formatDateTimeLabel } from '../../lib/strings';
 import { ProviderStoryItem } from './types';
 
@@ -12,6 +13,8 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
   stories,
   onOpenStory,
 }) => {
+  const { t } = useI18n();
+
   const stats = useMemo(() => {
     const publicStories = stories.filter((story) => story.storyAudience === 'public').length;
     const favoriteStories = stories.filter(
@@ -32,23 +35,23 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
     <section id="provider-stories" className="psp-surface">
       <div className="psp-surface__header">
         <div>
-          <h2>Story updates</h2>
+          <h2>{t('Story updates')}</h2>
           <div className="psp-surface__sub">
-            View recent story posts in a dedicated viewer, then reply directly into messaging.
+            {t('View recent story posts in a dedicated viewer, then reply directly into messaging.')}
           </div>
         </div>
         <div className="psp-summary-strip">
           <span className="psp-summary-chip">
             <strong>{stories.length}</strong>
-            active stories
+            {t('active stories')}
           </span>
           <span className="psp-summary-chip">
             <strong>{stats.publicStories}</strong>
-            public
+            {t('public')}
           </span>
           <span className="psp-summary-chip">
             <strong>{stats.favoriteStories}</strong>
-            favorites only
+            {t('favorites only')}
           </span>
         </div>
       </div>
@@ -87,7 +90,7 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.03),rgba(15,23,42,0.62))]" />
               <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                 <span className="rounded-full bg-fuchsia-600 px-3 py-1 text-xs font-bold text-white">
-                  Story
+                  {t('Story')}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
                   {story.storyAudience === 'favorites_only' ? (
@@ -95,7 +98,7 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
                   ) : (
                     <Globe size={12} />
                   )}
-                  {story.storyAudience === 'favorites_only' ? 'Favorites' : 'Public'}
+                  {story.storyAudience === 'favorites_only' ? t('Favorites') : t('Public')}
                 </span>
               </div>
               {story.mediaType === 'video' ? (
@@ -111,7 +114,7 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
                   {story.title}
                 </div>
                 <div className="mt-2 text-sm text-slate-500">
-                  {story.service?.name || 'Provider story'}
+                  {story.service?.name || t('Provider story')}
                 </div>
               </div>
 
@@ -123,8 +126,8 @@ const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
                 <span className="inline-flex items-center gap-2">
                   <Sparkles size={14} />
                   {story.storyExpiresAt
-                    ? `Expires ${formatDateTimeLabel(story.storyExpiresAt)}`
-                    : 'Active now'}
+                    ? `${t('Expires')} ${formatDateTimeLabel(story.storyExpiresAt)}`
+                    : t('Active now')}
                 </span>
               </div>
             </div>

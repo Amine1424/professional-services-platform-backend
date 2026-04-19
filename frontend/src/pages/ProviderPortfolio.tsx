@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Camera,
   Globe,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../config/api';
+import { useI18n } from '../i18n';
 import '../styles/app-primitives.css';
 
 type MediaType = 'image' | 'video';
@@ -95,6 +96,7 @@ const emptyForm: PortfolioFormState = {
 };
 
 const ProviderPortfolio: React.FC = () => {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -109,7 +111,7 @@ const ProviderPortfolio: React.FC = () => {
   const [selectedThumbnailFile, setSelectedThumbnailFile] = useState<File | null>(null);
   const [form, setForm] = useState<PortfolioFormState>(emptyForm);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [mediaRes, servicesRes] = await Promise.all([
         api.get('/provider-media/me'),
@@ -128,15 +130,15 @@ const ProviderPortfolio: React.FC = () => {
         }))
       );
     } catch {
-      toast.error('Failed to load portfolio data.');
+      toast.error(t('Failed to load portfolio data.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const stats = useMemo(() => {
     const images = items.filter((item) => item.mediaType === 'image').length;
@@ -193,12 +195,12 @@ const ProviderPortfolio: React.FC = () => {
     event.preventDefault();
 
     if (!form.title.trim()) {
-      toast.error('Title is required.');
+      toast.error(t('Title is required.'));
       return;
     }
 
     if (!editingId && !selectedMediaFile) {
-      toast.error('Choose an image or video first.');
+      toast.error(t('Choose an image or video first.'));
       return;
     }
 
@@ -228,20 +230,20 @@ const ProviderPortfolio: React.FC = () => {
 
       if (editingId) {
         await api.put(`/provider-media/${editingId}`, payload);
-        toast.success('Item updated successfully.');
+        toast.success(t('Item updated successfully.'));
       } else {
         await api.post('/provider-media', payload);
         toast.success(
           form.isStory
-            ? 'Story published successfully.'
-            : 'Portfolio item published successfully.'
+            ? t('Story published successfully.')
+            : t('Portfolio item published successfully.')
         );
       }
 
       resetForm();
       await loadData();
     } catch (requestError: any) {
-      toast.error(requestError?.response?.data?.message || 'Action failed.');
+      toast.error(requestError?.response?.data?.message || t('Action failed.'));
     } finally {
       setSaving(false);
     }
@@ -269,15 +271,15 @@ const ProviderPortfolio: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this item?')) return;
+    if (!window.confirm(t('Delete this item?'))) return;
 
     try {
       await api.delete(`/provider-media/${id}`);
-      toast.success('Item deleted successfully.');
+      toast.success(t('Item deleted successfully.'));
       if (editingId === id) resetForm();
       await loadData();
     } catch (requestError: any) {
-      toast.error(requestError?.response?.data?.message || 'Failed to delete the item.');
+      toast.error(requestError?.response?.data?.message || t('Failed to delete the item.'));
     }
   };
 
@@ -291,7 +293,7 @@ const ProviderPortfolio: React.FC = () => {
       }));
       setOpenCommentsMediaId(mediaId);
     } catch {
-      toast.error('Failed to load comments.');
+      toast.error(t('Failed to load comments.'));
     } finally {
       setCommentsLoadingId(null);
     }
@@ -300,12 +302,12 @@ const ProviderPortfolio: React.FC = () => {
   const handleDeleteComment = async (commentId: string, mediaId: string) => {
     try {
       await api.delete(`/provider-media/comments/${commentId}`);
-      toast.success('Comment deleted successfully.');
+      toast.success(t('Comment deleted successfully.'));
       await loadComments(mediaId);
       await loadData();
     } catch (requestError: any) {
       toast.error(
-        requestError?.response?.data?.message || 'Failed to delete the comment.'
+        requestError?.response?.data?.message || t('Failed to delete the comment.')
       );
     }
   };
@@ -325,23 +327,23 @@ const ProviderPortfolio: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>{editingId ? 'Edit media / story' : 'Publish portfolio item or story'}</h2>
+              <h2>{editingId ? t('Edit media / story') : t('Publish portfolio item or story')}</h2>
               <div className="psp-surface__sub">
-                Stories now support two audiences: public and favorite-followers only.
+                {t('Stories now support two audiences: public and favorite-followers only.')}
               </div>
             </div>
           </div>
 
           <div className="mb-5 rounded-[24px] bg-slate-50 p-4 text-sm leading-7 text-slate-600">
-            Current plan:{' '}
+            {t('Current plan')}:{' '}
             <strong className="text-slate-900">
-              {preferenceData?.preference.selectedPlan || 'basic'}
+              {preferenceData?.preference.selectedPlan || t('basic')}
             </strong>
           </div>
 
           <form onSubmit={handleSubmit} className="grid gap-4">
             <div>
-              <div className="mb-2 text-sm font-bold text-slate-700">Title</div>
+              <div className="mb-2 text-sm font-bold text-slate-700">{t('Title')}</div>
               <input
                 name="title"
                 value={form.title}
@@ -352,27 +354,27 @@ const ProviderPortfolio: React.FC = () => {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <div className="mb-2 text-sm font-bold text-slate-700">Media type</div>
+                <div className="mb-2 text-sm font-bold text-slate-700">{t('Media type')}</div>
                 <select
                   name="mediaType"
                   value={form.mediaType}
                   onChange={handleChange}
                   className="psp-select"
                 >
-                  <option value="image">image</option>
-                  <option value="video">video</option>
+                  <option value="image">{t('image')}</option>
+                  <option value="video">{t('video')}</option>
                 </select>
               </div>
 
               <div>
-                <div className="mb-2 text-sm font-bold text-slate-700">Related service</div>
+                <div className="mb-2 text-sm font-bold text-slate-700">{t('Related service')}</div>
                 <select
                   name="serviceId"
                   value={form.serviceId}
                   onChange={handleChange}
                   className="psp-select"
                 >
-                  <option value="">No linked service</option>
+                  <option value="">{t('No linked service')}</option>
                   {services.map((service) => (
                     <option key={service.id} value={service.id}>
                       {service.name}
@@ -389,22 +391,24 @@ const ProviderPortfolio: React.FC = () => {
                 checked={form.isStory}
                 onChange={handleChange}
               />
-              Publish this as a story (expires automatically after 24 hours)
+              {t('Publish this as a story (expires automatically after 24 hours)')}
             </label>
 
             {form.isStory ? (
               <div>
-                <div className="mb-2 text-sm font-bold text-slate-700">Story audience</div>
+                <div className="mb-2 text-sm font-bold text-slate-700">{t('Story audience')}</div>
                 <select
                   name="storyAudience"
                   value={form.storyAudience}
                   onChange={handleChange}
                   className="psp-select"
                 >
-                  <option value="public">Public — everyone can see it</option>
-                  <option value="favorites_only">
-                    Favorites only — only customers who favorited you
-                  </option>
+                          <option value="public">
+                            {t('Public — everyone can see it')}
+                          </option>
+                          <option value="favorites_only">
+                            {t('Favorites only — only customers who favorited you')}
+                          </option>
                 </select>
               </div>
             ) : null}
@@ -412,13 +416,13 @@ const ProviderPortfolio: React.FC = () => {
             <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
               <div className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-slate-700">
                 <Upload size={14} />
-                Main file
+                {t('Main file')}
               </div>
               <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
                 <span>
                   {selectedMediaFile
                     ? selectedMediaFile.name
-                    : 'Choose image or video from computer'}
+                    : t('Choose image or video from computer')}
                 </span>
                 <Camera size={16} />
                 <input
@@ -434,13 +438,13 @@ const ProviderPortfolio: React.FC = () => {
               <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-slate-700">
                   <Upload size={14} />
-                  Video thumbnail
+                  {t('Video thumbnail')}
                 </div>
                 <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
                   <span>
                     {selectedThumbnailFile
                       ? selectedThumbnailFile.name
-                      : 'Optional thumbnail image'}
+                      : t('Optional thumbnail image')}
                   </span>
                   <Camera size={16} />
                   <input
@@ -456,7 +460,7 @@ const ProviderPortfolio: React.FC = () => {
             ) : null}
 
             <div>
-              <div className="mb-2 text-sm font-bold text-slate-700">Description</div>
+              <div className="mb-2 text-sm font-bold text-slate-700">{t('Description')}</div>
               <textarea
                 name="description"
                 value={form.description}
@@ -466,7 +470,7 @@ const ProviderPortfolio: React.FC = () => {
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-bold text-slate-700">Sort order</div>
+              <div className="mb-2 text-sm font-bold text-slate-700">{t('Sort order')}</div>
               <input
                 type="number"
                 name="sortOrder"
@@ -483,7 +487,7 @@ const ProviderPortfolio: React.FC = () => {
                 checked={form.isPublished}
                 onChange={handleChange}
               />
-              Publish this item
+              {t('Publish this item')}
             </label>
 
             <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
@@ -493,7 +497,7 @@ const ProviderPortfolio: React.FC = () => {
                 checked={form.isFeatured}
                 onChange={handleChange}
               />
-              Mark as featured work
+              {t('Mark as featured work')}
             </label>
 
             <label className="inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
@@ -503,36 +507,36 @@ const ProviderPortfolio: React.FC = () => {
                 checked={form.showPromoBadge}
                 onChange={handleChange}
               />
-              Show promo badge
+              {t('Show promo badge')}
             </label>
 
             <div>
-              <div className="mb-2 text-sm font-bold text-slate-700">Promo badge text</div>
+              <div className="mb-2 text-sm font-bold text-slate-700">{t('Promo badge text')}</div>
               <input
                 name="promoBadgeText"
                 value={form.promoBadgeText}
                 onChange={handleChange}
                 className="psp-input"
-                placeholder="New / Popular / Fast delivery"
+                placeholder={t('New / Popular / Fast delivery')}
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button type="submit" disabled={saving} className="psp-button psp-button--primary">
                 {saving
-                  ? 'Saving...'
+                  ? t('Saving...')
                   : editingId
-                    ? 'Save changes'
+                    ? t('Save changes')
                     : form.isStory
-                      ? 'Publish story'
-                      : 'Publish item'}
+                      ? t('Publish story')
+                      : t('Publish item')}
               </button>
               <button
                 type="button"
                 className="psp-button psp-button--secondary"
                 onClick={resetForm}
               >
-                Reset
+                {t('Reset')}
               </button>
             </div>
           </form>
@@ -541,11 +545,11 @@ const ProviderPortfolio: React.FC = () => {
         <div className="grid gap-6">
           <section className="psp-stat-grid">
             {[
-              { label: 'Total items', value: stats.total, icon: Camera },
-              { label: 'Images', value: stats.images, icon: Camera },
-              { label: 'Videos', value: stats.videos, icon: PlayCircle },
-              { label: 'Stories', value: stats.stories, icon: Sparkles },
-              { label: 'Likes', value: stats.totalLikes, icon: Heart },
+              { label: t('Total items'), value: stats.total, icon: Camera },
+              { label: t('Images'), value: stats.images, icon: Camera },
+              { label: t('Videos'), value: stats.videos, icon: PlayCircle },
+              { label: t('Stories'), value: stats.stories, icon: Sparkles },
+              { label: t('Likes'), value: stats.totalLikes, icon: Heart },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -563,17 +567,17 @@ const ProviderPortfolio: React.FC = () => {
           <section className="psp-surface">
             <div className="psp-surface__header">
               <div>
-                <h2>Media archive</h2>
+                <h2>{t('Media archive')}</h2>
               </div>
             </div>
 
             <div className="mb-5 flex flex-wrap gap-3 rounded-[24px] bg-slate-50 p-5">
               {[
-                ['all', 'All'],
-                ['published', 'Published'],
-                ['story', 'Stories'],
-                ['image', 'Images'],
-                ['video', 'Videos'],
+                ['all', t('All')],
+                ['published', t('Published')],
+                ['story', t('Stories')],
+                ['image', t('Images')],
+                ['video', t('Videos')],
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -591,7 +595,7 @@ const ProviderPortfolio: React.FC = () => {
             </div>
 
             {!filteredItems.length ? (
-              <div className="psp-empty-state">No items match this filter.</div>
+              <div className="psp-empty-state">{t('No items match this filter.')}</div>
             ) : (
               <div className="grid gap-5 md:grid-cols-2">
                 {filteredItems.map((item) => (
@@ -618,15 +622,15 @@ const ProviderPortfolio: React.FC = () => {
                       <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                         {item.isStory ? (
                           <span className="rounded-full bg-fuchsia-600 px-3 py-1 text-xs font-bold text-white">
-                            Story
+                            {t('Story')}
                           </span>
                         ) : null}
 
                         {item.isStory ? (
                           <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                            {item.storyAudience === 'favorites_only'
-                              ? 'Favorites only'
-                              : 'Public'}
+                              {item.storyAudience === 'favorites_only'
+                                ? t('Favorites only')
+                                : t('Public')}
                           </span>
                         ) : null}
 
@@ -645,10 +649,10 @@ const ProviderPortfolio: React.FC = () => {
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
                           <span className="rounded-full bg-slate-100 px-3 py-1">
-                            {item.service?.name || 'Standalone'}
+                            {item.service?.name || t('Standalone')}
                           </span>
                           <span className="rounded-full bg-slate-100 px-3 py-1">
-                            {item.isPublished ? 'Published' : 'Hidden'}
+                            {item.isPublished ? t('Published') : t('Hidden')}
                           </span>
                           {item.isStory ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
@@ -658,8 +662,8 @@ const ProviderPortfolio: React.FC = () => {
                                 <Globe size={12} />
                               )}
                               {item.storyAudience === 'favorites_only'
-                                ? 'Favorites'
-                                : 'Public'}
+                                ? t('Favorites')
+                                : t('Public')}
                             </span>
                           ) : null}
                         </div>
@@ -681,7 +685,7 @@ const ProviderPortfolio: React.FC = () => {
                         {item.isStory && item.storyExpiresAt ? (
                           <span className="inline-flex items-center gap-2">
                             <Sparkles size={14} />
-                            Expires: {new Date(item.storyExpiresAt).toLocaleString()}
+                            {t('Expires')}: {new Date(item.storyExpiresAt).toLocaleString()}
                           </span>
                         ) : null}
                       </div>
@@ -692,14 +696,14 @@ const ProviderPortfolio: React.FC = () => {
                           className="psp-button psp-button--secondary"
                           onClick={() => handleEdit(item)}
                         >
-                          Edit
+                          {t('Edit')}
                         </button>
                         <button
                           type="button"
                           className="psp-button psp-button--danger"
                           onClick={() => handleDelete(item.id)}
                         >
-                          Delete
+                          {t('Delete')}
                         </button>
                         <button
                           type="button"
@@ -711,10 +715,10 @@ const ProviderPortfolio: React.FC = () => {
                           }
                         >
                           {commentsLoadingId === item.id
-                            ? 'Loading comments...'
+                            ? t('Loading comments...')
                             : openCommentsMediaId === item.id
-                              ? 'Hide comments'
-                              : 'Open comments'}
+                              ? t('Hide comments')
+                              : t('Open comments')}
                         </button>
                       </div>
 
@@ -722,7 +726,7 @@ const ProviderPortfolio: React.FC = () => {
                         <div className="grid gap-3">
                           {(commentsMap[item.id] || []).length === 0 ? (
                             <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                              No comments yet.
+                              {t('No comments yet.')}
                             </div>
                           ) : (
                             (commentsMap[item.id] || []).map((comment) => (
@@ -736,7 +740,7 @@ const ProviderPortfolio: React.FC = () => {
                                   className="psp-button psp-button--danger mt-3"
                                   onClick={() => handleDeleteComment(comment.id, item.id)}
                                 >
-                                  Delete comment
+                                  {t('Delete comment')}
                                 </button>
                               </div>
                             ))

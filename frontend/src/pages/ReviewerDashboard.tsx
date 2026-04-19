@@ -183,7 +183,7 @@ const ReviewerDashboard: React.FC = () => {
                   <div className="mt-2 text-sm leading-7 text-slate-600">
                     {[nextProvider.city, nextProvider.wilaya, nextProvider.region]
                       .filter(Boolean)
-                      .join(', ') || 'Algeria'}{' '}
+                      .join(', ') || t('Algeria')}{' '}
                     | {nextProvider.primaryCategory?.name || t('No category')} | {nextProvider.servicesCount}{' '}
                     {t(nextProvider.servicesCount === 1 ? 'service' : 'services')}
                   </div>
@@ -233,7 +233,7 @@ const ReviewerDashboard: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Next providers to review</h2>
+              <h2>{t('Next providers to review')}</h2>
               <div className="psp-surface__sub">
                 {t('Open the provider record directly or jump into the inbox if admin already sent a thread.')}
               </div>
@@ -303,7 +303,7 @@ const ReviewerDashboard: React.FC = () => {
         <article className="psp-surface">
           <div className="psp-surface__header">
             <div>
-              <h2>Moderation state</h2>
+              <h2>{t('Moderation state')}</h2>
               <div className="psp-surface__sub">
                 {t('Current provider status distribution across the moderation system.')}
               </div>

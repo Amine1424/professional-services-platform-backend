@@ -17,6 +17,7 @@ import {
   PublicProviderPayload,
   ReviewItem,
 } from '../components/public-provider/types';
+import { useI18n } from '../i18n';
 import { getStoredUser } from '../lib/role-routing';
 import '../styles/app-primitives.css';
 
@@ -48,6 +49,7 @@ const emptyRequestForm: ProviderRequestForm = {
 };
 
 const PublicProviderPage: React.FC = () => {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -128,20 +130,20 @@ const PublicProviderPage: React.FC = () => {
         }
       } catch (requestError: any) {
         if (silent) {
-          toast.error(requestError.response?.data?.message || 'Failed to refresh provider data.');
+          toast.error(requestError.response?.data?.message || t('Failed to refresh provider data.'));
           return;
         }
 
         setData(null);
         setReviews([]);
-        setError(requestError.response?.data?.message || 'Failed to load the provider page.');
+        setError(requestError.response?.data?.message || t('Failed to load the provider page.'));
       } finally {
         if (!silent) {
           setLoading(false);
         }
       }
     },
-    [id]
+    [id, t]
   );
 
   const loadFavoritesState = useCallback(async () => {
@@ -278,24 +280,24 @@ const PublicProviderPage: React.FC = () => {
       return;
     }
 
-    if (intent === 'favorite') {
-      if (!isFavorite) {
-        void api
-          .post(`/favorites/providers/${id}`)
-          .then(() => {
-            setIsFavorite(true);
-            toast.success('Provider added to favorites.');
-            void loadPage({ silent: true });
-          })
-          .catch((requestError: any) => {
-            toast.error(requestError.response?.data?.message || 'Failed to update favorites.');
-          })
-          .finally(() => clearIntent());
-      } else {
-        clearIntent();
+      if (intent === 'favorite') {
+        if (!isFavorite) {
+          void api
+            .post(`/favorites/providers/${id}`)
+            .then(() => {
+              setIsFavorite(true);
+              toast.success(t('Provider added to favorites.'));
+              void loadPage({ silent: true });
+            })
+            .catch((requestError: any) => {
+              toast.error(requestError.response?.data?.message || t('Failed to update favorites.'));
+            })
+            .finally(() => clearIntent());
+        } else {
+          clearIntent();
+        }
       }
-    }
-  }, [currentUser?.role, id, intent, isFavorite, loadPage, navigate, searchParams, setSearchParams, token]);
+  }, [currentUser?.role, id, intent, isFavorite, loadPage, navigate, searchParams, setSearchParams, t, token]);
 
   const requireCustomerForPath = useCallback(
     (redirectPath: string) => {
@@ -305,13 +307,13 @@ const PublicProviderPage: React.FC = () => {
       }
 
       if (currentUser?.role !== 'customer') {
-        toast.error('This action is available for customer accounts only.');
+        toast.error(t('This action is available for customer accounts only.'));
         return false;
       }
 
       return true;
     },
-    [currentUser?.role, navigate, token]
+    [currentUser?.role, navigate, t, token]
   );
 
   const requireCustomer = useCallback(
@@ -362,16 +364,16 @@ const PublicProviderPage: React.FC = () => {
       if (isFavorite) {
         await api.delete(`/favorites/providers/${id}`);
         setIsFavorite(false);
-        toast.success('Provider removed from favorites.');
+        toast.success(t('Provider removed from favorites.'));
       } else {
         await api.post(`/favorites/providers/${id}`);
         setIsFavorite(true);
-        toast.success('Provider added to favorites.');
+        toast.success(t('Provider added to favorites.'));
       }
 
       await loadPage({ silent: true });
     } catch (requestError: any) {
-      toast.error(requestError.response?.data?.message || 'Failed to update favorites.');
+      toast.error(requestError.response?.data?.message || t('Failed to update favorites.'));
     }
   };
 
@@ -380,10 +382,10 @@ const PublicProviderPage: React.FC = () => {
 
     try {
       await api.post(`/provider-reviews/provider/${id}`, reviewForm);
-      toast.success('Review submitted.');
+      toast.success(t('Review submitted.'));
       await Promise.all([loadPage({ silent: true }), loadViewerState()]);
     } catch (requestError: any) {
-      toast.error(requestError.response?.data?.message || 'Failed to submit the review.');
+      toast.error(requestError.response?.data?.message || t('Failed to submit the review.'));
     }
   };
 
@@ -391,7 +393,7 @@ const PublicProviderPage: React.FC = () => {
     if (!requireCustomer('request')) return;
 
     if (!requestForm.description.trim()) {
-      toast.error('Request description is required.');
+      toast.error(t('Request description is required.'));
       return;
     }
 
@@ -409,7 +411,7 @@ const PublicProviderPage: React.FC = () => {
         initialMessage: requestForm.initialMessage || requestForm.description,
       });
 
-      toast.success('Service request sent.');
+      toast.success(t('Service request sent.'));
       setShowRequestForm(false);
       setRequestForm(emptyRequestForm);
       navigate(
@@ -418,7 +420,7 @@ const PublicProviderPage: React.FC = () => {
           : '/customer/orders'
       );
     } catch (requestError: any) {
-      toast.error(requestError.response?.data?.message || 'Failed to submit the request.');
+      toast.error(requestError.response?.data?.message || t('Failed to submit the request.'));
     } finally {
       setSubmittingRequest(false);
     }
@@ -429,9 +431,9 @@ const PublicProviderPage: React.FC = () => {
       const response = await api.get(`/provider-media/${mediaId}/comments`);
       setCommentsMap((current) => ({ ...current, [mediaId]: response.data?.data || [] }));
     } catch {
-      toast.error('Failed to refresh comments.');
+      toast.error(t('Failed to refresh comments.'));
     }
-  }, []);
+  }, [t]);
 
   const handleToggleLike = useCallback(async (mediaId: string) => {
     if (!requireCustomerForPath(buildProviderUrl())) return;
@@ -466,24 +468,24 @@ const PublicProviderPage: React.FC = () => {
         ...item,
         likesCount: Math.max(0, Number(item.likesCount || 0) + (wasLiked ? 1 : -1)),
       }));
-      toast.error(requestError.response?.data?.message || 'Failed to update like state.');
+      toast.error(requestError.response?.data?.message || t('Failed to update like state.'));
     } finally {
       setActionMediaId(null);
     }
-  }, [buildProviderUrl, requireCustomerForPath, updateMediaItem]);
+  }, [buildProviderUrl, requireCustomerForPath, t, updateMediaItem]);
 
   const handleAddComment = useCallback(async (mediaId: string) => {
     if (!requireCustomerForPath(buildProviderUrl())) return;
 
     const body = commentDraftsRef.current[mediaId]?.trim();
     if (!body) {
-      toast.error('Write a comment first.');
+      toast.error(t('Write a comment first.'));
       return;
     }
 
     const optimisticComment: MediaComment = {
       id: `temp-comment-${mediaId}-${Date.now()}`,
-      authorName: 'Sending...',
+      authorName: t('Sending...'),
       body,
       createdAt: new Date().toISOString(),
     };
@@ -525,7 +527,7 @@ const PublicProviderPage: React.FC = () => {
         }));
       }
 
-      toast.success('Comment added.');
+      toast.success(t('Comment added.'));
     } catch (requestError: any) {
       setCommentDrafts((current) => {
         const nextDrafts = { ...current, [mediaId]: body };
@@ -545,11 +547,11 @@ const PublicProviderPage: React.FC = () => {
           (comment) => comment.id !== optimisticComment.id
         ),
       }));
-      toast.error(requestError.response?.data?.message || 'Failed to add the comment.');
+      toast.error(requestError.response?.data?.message || t('Failed to add the comment.'));
     } finally {
       setActionMediaId(null);
     }
-  }, [buildProviderUrl, requireCustomerForPath, updateMediaItem]);
+  }, [buildProviderUrl, requireCustomerForPath, t, updateMediaItem]);
 
   const handleCommentDraftChange = useCallback((mediaId: string, value: string) => {
     setCommentDrafts((current) => {
@@ -596,7 +598,7 @@ const PublicProviderPage: React.FC = () => {
     if (!requireCustomerForPath(redirectPath)) return;
 
     if (!storyReplyDraft.trim()) {
-      toast.error('Write a reply first.');
+      toast.error(t('Write a reply first.'));
       return;
     }
 
@@ -610,10 +612,10 @@ const PublicProviderPage: React.FC = () => {
         response.data?.data?.redirectTo ||
         `/customer/messages?conversationId=${response.data?.data?.conversationId || ''}`;
 
-      toast.success('Reply sent successfully.');
+      toast.success(t('Reply sent successfully.'));
       navigate(redirectTo);
     } catch (requestError: any) {
-      toast.error(requestError.response?.data?.message || 'Failed to send the story reply.');
+      toast.error(requestError.response?.data?.message || t('Failed to send the story reply.'));
     } finally {
       setReplyingToStory(false);
     }
@@ -636,14 +638,14 @@ const PublicProviderPage: React.FC = () => {
       <PublicMarketplaceLayout activeNav="explore">
         <div className="pt-8">
           <div className="psp-error-state">
-            <div className="font-bold">Provider page unavailable.</div>
-            <div>{error || 'This provider could not be found.'}</div>
+            <div className="font-bold">{t('Provider page unavailable.')}</div>
+            <div>{error || t('This provider could not be found.')}</div>
             <button
               type="button"
               className="psp-button psp-button--primary mt-4"
               onClick={() => navigate('/explore')}
             >
-              Back to Explore
+              {t('Back to Explore')}
             </button>
           </div>
         </div>
@@ -653,20 +655,20 @@ const PublicProviderPage: React.FC = () => {
 
   const { provider, services, media } = data;
   const providerLocation =
-    [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') || 'Algeria';
+    [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') || t('Algeria');
   const ownerName = `${provider.owner.firstName} ${provider.owner.lastName}`.trim();
 
   const canReplyToStory = Boolean(token && currentUser?.role === 'customer');
   const replyButtonLabel = !token
-    ? 'Sign in to reply'
+    ? t('Sign in to reply')
     : currentUser?.role !== 'customer'
-      ? 'Customer account required'
-      : 'Reply in chat';
+      ? t('Customer account required')
+      : t('Reply in chat');
   const replyPlaceholder = !token
-    ? 'Sign in with a customer account to reply to this story.'
+    ? t('Sign in with a customer account to reply to this story.')
     : currentUser?.role !== 'customer'
-      ? 'Story replies are available to customer accounts.'
-      : 'Reply to this story...';
+      ? t('Story replies are available to customer accounts.')
+      : t('Reply to this story...');
 
   return (
     <PublicMarketplaceLayout activeNav="explore">
@@ -687,14 +689,6 @@ const PublicProviderPage: React.FC = () => {
           onToggleFavorite={toggleFavorite}
         />
 
-        <ProviderQuickNav
-          hasStories={stories.length > 0}
-          servicesCount={services.length}
-          mediaCount={media.length}
-          reviewsCount={reviews.length}
-          responseTimeMinutes={provider.responseTimeMinutes || 0}
-        />
-
         <ProviderRequestPanel
           visible={showRequestForm}
           services={services}
@@ -708,6 +702,13 @@ const PublicProviderPage: React.FC = () => {
             }))
           }
           onSubmit={() => void submitRequest()}
+        />
+
+        <ProviderQuickNav
+          hasStories={stories.length > 0}
+          servicesCount={services.length}
+          mediaCount={media.length}
+          reviewsCount={reviews.length}
         />
 
         <ProviderServicesSection
@@ -730,12 +731,6 @@ const PublicProviderPage: React.FC = () => {
           onAddComment={handleAddComment}
         />
 
-        <ProviderProfileDetails
-          provider={provider}
-          providerLocation={providerLocation}
-          customerGeo={customerGeo}
-        />
-
         <ProviderReviewsSection
           reviews={reviews}
           reviewForm={reviewForm}
@@ -754,6 +749,12 @@ const PublicProviderPage: React.FC = () => {
           }
           onSubmit={() => void submitReview()}
         />
+
+        <ProviderProfileDetails
+          provider={provider}
+          providerLocation={providerLocation}
+          customerGeo={customerGeo}
+        />
       </div>
 
       <StoryViewer
@@ -771,7 +772,7 @@ const PublicProviderPage: React.FC = () => {
         onPrev={goPrevStory}
         onNext={goNextStory}
         onProviderAction={() => closeStory()}
-        providerActionLabel="Browse provider profile"
+        providerActionLabel={t('Browse provider profile')}
       />
     </PublicMarketplaceLayout>
   );

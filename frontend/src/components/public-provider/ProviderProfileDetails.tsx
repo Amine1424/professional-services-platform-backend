@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExternalLink, MapPin, Navigation } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import {
   buildGoogleMapsSearchUrl,
   estimateTravelLabel,
@@ -20,6 +21,8 @@ const ProviderProfileDetails: React.FC<ProviderProfileDetailsProps> = ({
   providerLocation,
   customerGeo,
 }) => {
+  const { t } = useI18n();
+
   const mapsQuery = `${provider.companyName} ${provider.city || ''} ${provider.wilaya || ''} Algeria`.trim();
   const travelEstimate = estimateTravelLabel({
     providerCoverageMode: provider.serviceCoverage.mode,
@@ -34,68 +37,72 @@ const ProviderProfileDetails: React.FC<ProviderProfileDetailsProps> = ({
       <article className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Reach, trust, and booking context</h2>
+            <h2>{t('Operational details')}</h2>
             <div className="psp-surface__sub">
-              Keep only the support context needed after the service and proof sections are already
-              clear.
+              {t(
+                'Keep booking context, coverage, and contact visibility in one compact support block.'
+              )}
             </div>
           </div>
         </div>
 
         <div className="psp-detail-grid">
           <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Primary category</div>
+            <div className="psp-detail-item__label">{t('Primary category')}</div>
             <div className="psp-detail-item__value">
-              {provider.primaryCategory?.name || 'Not specified'}
+              {provider.primaryCategory?.name || t('Not specified')}
             </div>
           </div>
           <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Base location</div>
+            <div className="psp-detail-item__label">{t('Base location')}</div>
             <div className="psp-detail-item__value">{providerLocation}</div>
           </div>
           <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Service coverage</div>
+            <div className="psp-detail-item__label">{t('Service coverage')}</div>
             <div className="psp-detail-item__value">{provider.serviceCoverage.label}</div>
           </div>
           <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Travel estimate</div>
+            <div className="psp-detail-item__label">{t('Travel estimate')}</div>
             <div className="psp-detail-item__value">{travelEstimate}</div>
-          </div>
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Plan</div>
-            <div className="psp-detail-item__value">
-              {provider.preference.selectedPlan.toUpperCase()}
-            </div>
-          </div>
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">Moderation status</div>
-            <div className="psp-detail-item__value capitalize">{provider.status}</div>
           </div>
         </div>
 
-        <div className="mt-6 psp-summary-strip">
-          <span className="psp-summary-chip">
-            <strong>Email</strong>
-            {provider.contact.email || 'Hidden'}
-          </span>
-          <span className="psp-summary-chip">
-            <strong>Phone</strong>
-            {provider.contact.phoneNumber || 'Hidden'}
-          </span>
-          <span className="psp-summary-chip">
-            <strong>Address</strong>
-            {provider.contact.addressLine || 'Hidden'}
-          </span>
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              {t('Email')}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-700">
+              {provider.contact.email || t('Hidden')}
+            </div>
+          </div>
+          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              {t('Phone')}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-700">
+              {provider.contact.phoneNumber || t('Hidden')}
+            </div>
+          </div>
+          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              {t('Address')}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-700">
+              {provider.contact.addressLine || t('Hidden')}
+            </div>
+          </div>
         </div>
       </article>
 
       <article className="psp-surface">
         <div className="psp-surface__header">
           <div>
-            <h2>Location handoff</h2>
+            <h2>{t('Location handoff')}</h2>
             <div className="psp-surface__sub">
-              Use map handoff only when visit planning or on-site scope matters. It is supporting
-              context, not the main decision surface.
+              {t(
+                'Use map handoff only when visit planning or on-site scope matters.'
+              )}
             </div>
           </div>
         </div>
@@ -103,27 +110,16 @@ const ProviderProfileDetails: React.FC<ProviderProfileDetailsProps> = ({
         <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] p-5">
           <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
             <MapPin size={13} />
-            Map destination
+            {t('Map destination')}
           </div>
           <div className="mt-4 text-[24px] font-black tracking-tight text-slate-900">
             {provider.companyName}
           </div>
           <div className="mt-2 text-sm leading-7 text-slate-600">{providerLocation}</div>
-
-          <div className="mt-5 psp-summary-strip">
-            <span className="psp-summary-chip">
-              <strong>Coverage</strong>
-              {provider.serviceCoverage.label}
-            </span>
-            <span className="psp-summary-chip">
-              <strong>Travel fit</strong>
-              {travelEstimate}
-            </span>
-            <span className="psp-summary-chip">
-              <ExternalLink size={14} />
-              <strong>Maps handoff</strong>
-              external navigation only when needed
-            </span>
+          <div className="mt-4 text-sm leading-7 text-slate-600">
+            {t(
+              'Open external navigation only when the customer needs to validate an on-site visit or travel fit.'
+            )}
           </div>
         </div>
 
@@ -131,10 +127,11 @@ const ProviderProfileDetails: React.FC<ProviderProfileDetailsProps> = ({
           href={buildGoogleMapsSearchUrl(mapsQuery)}
           target="_blank"
           rel="noreferrer"
-          className="psp-button psp-button--primary mt-5"
+          className="psp-button psp-button--secondary mt-5"
         >
           <Navigation size={16} />
-          Open in Google Maps
+          <ExternalLink size={14} />
+          {t('Open in Google Maps')}
         </a>
       </article>
     </section>

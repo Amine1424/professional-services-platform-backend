@@ -1,5 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { Heart, MessageCircle } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { formatDateTimeLabel } from '../../lib/strings';
 import { MediaComment, PublicProviderPayload } from './types';
 
@@ -38,8 +39,11 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
     onToggleLike,
     onDraftChange,
     onAddComment,
-  }) => (
-    <article className="overflow-hidden rounded-[26px] border border-white/80 bg-white/95 shadow-[0_20px_40px_rgba(15,23,42,0.06)]">
+  }) => {
+    const { t } = useI18n();
+
+    return (
+      <article className="overflow-hidden rounded-[26px] border border-white/80 bg-white/95 shadow-[0_20px_40px_rgba(15,23,42,0.06)]">
       <div className="relative h-[240px] bg-slate-100">
         {item.mediaType === 'image' ? (
           <img src={item.mediaUrl} alt={item.title} className="h-full w-full object-cover" />
@@ -58,7 +62,7 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
         ) : null}
         {item.isFeatured ? (
           <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-            Featured work
+            {t('Featured work')}
           </span>
         ) : null}
       </div>
@@ -69,7 +73,7 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
             <h3 className="text-[22px] font-black tracking-tight text-slate-900">{item.title}</h3>
           </div>
           <div className="mt-2 text-sm text-slate-500">
-            {item.service?.name || 'Standalone portfolio item'}
+            {item.service?.name || t('Standalone portfolio item')}
           </div>
         </div>
 
@@ -85,7 +89,7 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
             onClick={() => onToggleLike(item.id)}
           >
             <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
-            {liked ? 'Unlike' : 'Like'} {item.likesCount}
+            {liked ? t('Unlike') : t('Like')} {item.likesCount}
           </button>
           <button
             type="button"
@@ -94,18 +98,18 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
             onClick={() => onRefreshComments(item.id)}
           >
             <MessageCircle size={16} />
-            Comments {item.commentsCount}
+            {t('Comments')} {item.commentsCount}
           </button>
         </div>
 
         <div className="grid gap-3">
           <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-            Recent comments
+            {t('Recent comments')}
           </div>
 
           {comments.length === 0 ? (
             <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">
-              No comments yet.
+              {t('No comments yet.')}
             </div>
           ) : (
             <div className="grid gap-3">
@@ -127,7 +131,7 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
             <input
               value={commentDraft}
               onChange={(event) => onDraftChange(item.id, event.target.value)}
-              placeholder="Write a comment"
+              placeholder={t('Write a comment')}
               className="psp-input"
             />
             <button
@@ -136,13 +140,14 @@ const ProviderMediaCard = memo<ProviderMediaCardProps>(
               disabled={busy}
               onClick={() => onAddComment(item.id)}
             >
-              Comment
+              {t('Comment')}
             </button>
           </div>
         </div>
       </div>
     </article>
-  )
+    );
+  }
 );
 
 const ProviderMediaSection: React.FC<ProviderMediaSectionProps> = ({
@@ -156,6 +161,7 @@ const ProviderMediaSection: React.FC<ProviderMediaSectionProps> = ({
   onDraftChange,
   onAddComment,
 }) => {
+  const { t } = useI18n();
   const stats = useMemo(() => {
     return {
       total: media.length,
@@ -170,31 +176,33 @@ const ProviderMediaSection: React.FC<ProviderMediaSectionProps> = ({
     <section id="provider-portfolio" className="psp-surface">
       <div className="psp-surface__header">
         <div>
-          <h2>Portfolio and proof of work</h2>
+          <h2>{t('Portfolio and proof of work')}</h2>
           <div className="psp-surface__sub">
-            This is the live proof layer: images, videos, likes, comments, and recent customer reactions.
+            {t(
+              'This is the live proof layer: images, videos, likes, comments, and recent customer reactions.'
+            )}
           </div>
         </div>
         {media.length ? (
           <div className="psp-summary-strip">
             <span className="psp-summary-chip">
               <strong>{stats.total}</strong>
-              works
+              {t('works')}
             </span>
             <span className="psp-summary-chip">
               <strong>{stats.images}</strong>
-              images / <strong>{stats.videos}</strong> videos
+              {t('images')} / <strong>{stats.videos}</strong> {t('videos')}
             </span>
             <span className="psp-summary-chip">
               <strong>{stats.likes + stats.comments}</strong>
-              total interactions
+              {t('total interactions')}
             </span>
           </div>
         ) : null}
       </div>
 
       {!media.length ? (
-        <div className="psp-empty-state">No portfolio media has been published yet.</div>
+        <div className="psp-empty-state">{t('No portfolio media has been published yet.')}</div>
       ) : (
         <div className="grid gap-5">
           <div className="psp-card-grid">
