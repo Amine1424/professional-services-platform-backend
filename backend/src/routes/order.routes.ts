@@ -362,7 +362,7 @@ router.get(
     try {
       const requests = await AppDataSource.getRepository(ServiceRequest).find({
         where: { customerUserId: req.user!.userId },
-        relations: ['provider', 'provider.user', 'service'],
+        relations: ['provider', 'provider.user', 'provider.primaryCategory', 'service', 'service.category'],
         order: { createdAt: 'DESC' },
       });
 
@@ -389,11 +389,25 @@ router.get(
             companyName: item.provider.companyName,
             avatarUrl: item.provider.avatarUrl,
             isVerified: item.provider.isVerified,
+            averageRating: item.provider.averageRating,
+            reviewsCount: item.provider.reviewsCount,
+            responseTimeMinutes: item.provider.responseTimeMinutes,
+            primaryCategoryName: item.provider.primaryCategory?.name || null,
           },
           service: item.service
             ? {
                 id: item.service.id,
                 name: item.service.name,
+                categoryName: item.service.category?.name || null,
+                price: item.service.price,
+                currencyCode: item.service.currencyCode,
+              }
+            : null,
+          quote: item.quotedPrice
+            ? {
+                amount: item.quotedPrice,
+                currency: item.currencyCode,
+                updatedAt: item.updatedAt,
               }
             : null,
         })),
@@ -620,7 +634,7 @@ router.patch(
         ServiceRequestStatus.CANCELLED,
       ];
 
-      if (!status || !allowedStatuses.includes(status)) {
+      if (status && !allowedStatuses.includes(status)) {
         res.status(400).json({
           status: 'error',
           message: 'Invalid customer status',
@@ -628,7 +642,20 @@ router.patch(
         return;
       }
 
-      serviceRequest.status = status;
+      if (status === undefined && customerNote === undefined) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Nothing to update',
+        });
+        return;
+      }
+
+      const previousStatus = serviceRequest.status;
+      const previousNote = serviceRequest.customerNote;
+
+      if (status) {
+        serviceRequest.status = status;
+      }
       serviceRequest.customerNote =
         customerNote !== undefined
           ? String(customerNote).trim() || null
@@ -637,16 +664,26 @@ router.patch(
       await requestRepo.save(serviceRequest);
 
       if (serviceRequest.conversationId) {
-        const text = `Customer updated the request to ${serviceRequest.status}${
-          serviceRequest.customerNote ? ` - note: ${serviceRequest.customerNote}` : ''
-        }`;
+        const statusChanged = previousStatus !== serviceRequest.status;
+        const noteChanged = previousNote !== serviceRequest.customerNote;
+        const text = statusChanged
+          ? `Customer updated the request to ${serviceRequest.status}${
+              serviceRequest.customerNote ? ` - note: ${serviceRequest.customerNote}` : ''
+            }`
+          : noteChanged
+            ? `Customer updated the request note${
+                serviceRequest.customerNote ? ` - note: ${serviceRequest.customerNote}` : ''
+              }`
+            : '';
 
-        await safeAppendTimelineMessage(
-          serviceRequest.conversationId,
-          req.user!.userId,
-          'customer',
-          text
-        );
+        if (text) {
+          await safeAppendTimelineMessage(
+            serviceRequest.conversationId,
+            req.user!.userId,
+            'customer',
+            text
+          );
+        }
 
         const provider = await AppDataSource.getRepository(ServiceProvider).findOne({
           where: { id: serviceRequest.providerId },
@@ -657,8 +694,10 @@ router.patch(
             recipientUserId: provider.userId,
             actorUserId: req.user!.userId,
             type: NotificationType.REQUEST,
-            title: 'Customer updated a request',
-            body: `Status: ${serviceRequest.status}`,
+            title: statusChanged ? 'Customer updated a request' : 'Customer updated request notes',
+            body: statusChanged
+              ? `Status: ${serviceRequest.status}`
+              : serviceRequest.customerNote || 'A note was updated on the request',
             link: `/provider/requests?requestId=${serviceRequest.id}`,
             metadataJson: {
               requestId: serviceRequest.id,

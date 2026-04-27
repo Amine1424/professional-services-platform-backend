@@ -33,11 +33,17 @@ router.get(
         return;
       }
 
-      const providers = await providerRepo.find();
+      const providersWithRelations = await providerRepo.find({
+        relations: ['primaryCategory'],
+      });
       const prefs = await prefRepo.find();
 
-      const providerMap = new Map(providers.map((provider) => [provider.id, provider]));
+      const providerMap = new Map(
+        providersWithRelations.map((provider) => [provider.id, provider])
+      );
       const prefMap = new Map(prefs.map((pref) => [pref.providerId, pref]));
+
+      const favoriteMap = new Map(favorites.map((favorite) => [favorite.providerId, favorite]));
 
       const result = providerIds
         .map((providerId) => {
@@ -45,6 +51,7 @@ router.get(
           if (!provider) return null;
 
           const pref = prefMap.get(provider.id);
+          const favorite = favoriteMap.get(provider.id);
 
           return {
             id: provider.id,
@@ -57,7 +64,10 @@ router.get(
             averageRating: provider.averageRating,
             reviewsCount: provider.reviewsCount,
             isVerified: provider.isVerified,
+            responseTimeMinutes: provider.responseTimeMinutes,
+            primaryCategoryName: provider.primaryCategory?.name || null,
             profileBadgeText: pref?.profileBadgeText || null,
+            savedAt: favorite?.createdAt || null,
           };
         })
         .filter(Boolean);

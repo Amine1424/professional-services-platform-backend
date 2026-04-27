@@ -66,6 +66,15 @@ const buildHomeBase = async () => {
     take: 8,
   });
 
+  const servicesByProvider = new Map<string, Service[]>();
+  services.forEach((service) => {
+    if (!servicesByProvider.has(service.providerId)) {
+      servicesByProvider.set(service.providerId, []);
+    }
+
+    servicesByProvider.get(service.providerId)!.push(service);
+  });
+
   const featuredProviders = providers
     .filter((provider) => {
       const pref = preferenceMap.get(provider.id);
@@ -74,17 +83,40 @@ const buildHomeBase = async () => {
     .slice(0, 8)
     .map((provider) => {
       const pref = preferenceMap.get(provider.id);
+      const providerServices = servicesByProvider.get(provider.id) || [];
+      const startingPrice = providerServices
+        .map((service) => Number(service.price))
+        .filter((price) => Number.isFinite(price) && price > 0)
+        .sort((left, right) => left - right)[0];
+      const serviceHeadline = providerServices[0]?.name
+        ? `${providerServices[0].name}${provider.primaryCategory?.name ? ` - ${provider.primaryCategory.name}` : ''}`.trim()
+        : null;
+      const providerDescription = provider.description?.trim();
 
       return {
         id: provider.id,
         companyName: provider.companyName,
         avatarUrl: provider.avatarUrl,
         coverUrl: provider.coverUrl,
+        headline:
+          providerDescription ||
+          serviceHeadline ||
+          provider.primaryCategory?.name ||
+          'Professional services',
         city: provider.city,
         wilaya: provider.wilaya,
         region: provider.region,
         averageRating: provider.averageRating,
         reviewsCount: provider.reviewsCount,
+        yearsOfExperience: provider.yearsOfExperience,
+        responseTimeMinutes:
+          provider.responseTimeMinutes ||
+          providerServices
+            .map((service) => service.responseTimeHours * 60)
+            .filter((value) => Number.isFinite(value) && value > 0)
+            .sort((left, right) => left - right)[0] ||
+          null,
+        startingPrice: Number.isFinite(startingPrice) ? startingPrice : null,
         isVerified: provider.isVerified,
         profileBadgeText: pref?.profileBadgeText || null,
         primaryCategory: provider.primaryCategory
@@ -398,7 +430,11 @@ router.get('/search', async (req: Request, res: Response) => {
 
 router.get('/categories', async (_req: Request, res: Response) => {
   try {
-    const categories = await AppDataSource.getRepository(Category).find({
+    const categoryRepo = AppDataSource.getRepository(Category);
+    const serviceRepo = AppDataSource.getRepository(Service);
+    const providerRepo = AppDataSource.getRepository(ServiceProvider);
+
+    const categories = await categoryRepo.find({
       select: {
         id: true,
         name: true,
@@ -409,10 +445,52 @@ router.get('/categories', async (_req: Request, res: Response) => {
       },
     });
 
+    const [services, providers] = await Promise.all([
+      serviceRepo.find({
+        where: { status: ServiceStatus.PUBLISHED },
+        select: {
+          providerId: true,
+          categoryId: true,
+        },
+      }),
+      providerRepo.find({
+        select: {
+          id: true,
+          primaryCategoryId: true,
+        },
+      }),
+    ]);
+
+    const providerCountsByCategory = new Map<string, number>();
+
+    categories.forEach((category) => {
+      const branchIds = new Set(collectCategoryBranchIds(categories, category.id));
+      const providerIds = new Set<string>();
+
+      providers.forEach((provider) => {
+        if (provider.primaryCategoryId && branchIds.has(provider.primaryCategoryId)) {
+          providerIds.add(provider.id);
+        }
+      });
+
+      services.forEach((service) => {
+        if (service.categoryId && branchIds.has(service.categoryId)) {
+          providerIds.add(service.providerId);
+        }
+      });
+
+      providerCountsByCategory.set(category.id, providerIds.size);
+    });
+
     res.status(200).json({
       status: 'success',
       message: 'Discovery categories fetched successfully',
-      data: buildCategoryTree(categories),
+      data: buildCategoryTree(
+        categories.map((category) => ({
+          ...category,
+          providerCount: providerCountsByCategory.get(category.id) || 0,
+        }))
+      ),
     });
   } catch (error) {
     console.error('Failed to fetch discovery categories', error);

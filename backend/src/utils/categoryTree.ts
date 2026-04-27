@@ -6,6 +6,7 @@ export type CategoryBranchNode = {
   slug: string;
   description: string | null;
   iconUrl: string | null;
+  providerCount?: number;
   parentId: string | null;
   children: CategoryBranchNode[];
 };
@@ -13,7 +14,9 @@ export type CategoryBranchNode = {
 type CategoryShape = Pick<
   Category,
   'id' | 'name' | 'slug' | 'description' | 'iconUrl' | 'parentId'
->;
+> & {
+  providerCount?: number;
+};
 
 const compareCategories = (left: CategoryShape, right: CategoryShape) =>
   left.name.localeCompare(right.name, 'ar', {
@@ -33,6 +36,7 @@ export const buildCategoryTree = (
       slug: category.slug,
       description: category.description,
       iconUrl: category.iconUrl,
+      providerCount: category.providerCount,
       parentId: category.parentId,
       children: [],
     });

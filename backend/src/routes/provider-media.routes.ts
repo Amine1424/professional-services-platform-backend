@@ -18,14 +18,16 @@ import { NotificationType } from '../models/AppNotification';
 import Conversation, { ConversationStatus } from '../models/Conversation';
 import ConversationMessage from '../models/ConversationMessage';
 import {
-  createDiskUpload,
-  imageAndVideoFilter,
-  removeLocalUploadByUrl,
-  toPublicUploadPath,
-} from '../utils/uploads';
+  cleanupLocalUploadedFile,
+  createUploadMiddleware,
+  getUploadErrorMessage,
+  resolveUploadedFileUrl,
+  UPLOAD_FOLDERS,
+} from '../services/upload.service';
+import { imageAndVideoFilter, removeLocalUploadByUrl } from '../utils/uploads';
 
 const router = Router();
-const providerPortfolioUpload = createDiskUpload(
+const providerPortfolioUpload = createUploadMiddleware(
   (req) => ['providers', req.user?.userId || 'anonymous', 'portfolio'],
   imageAndVideoFilter
 );
@@ -123,11 +125,11 @@ const cleanupUploadedPortfolioFiles = (req: Request) => {
   const { mediaFile, thumbnailFile } = getUploadedPortfolioFiles(req);
 
   if (mediaFile) {
-    removeLocalUploadByUrl(toPublicUploadPath(mediaFile.path));
+    cleanupLocalUploadedFile(mediaFile);
   }
 
   if (thumbnailFile) {
-    removeLocalUploadByUrl(toPublicUploadPath(thumbnailFile.path));
+    cleanupLocalUploadedFile(thumbnailFile);
   }
 };
 
@@ -477,13 +479,26 @@ router.post(
 
       const shouldPublishAsStory = isTruthy(isStory);
       const normalizedStoryAudience = normalizeStoryAudience(storyAudience);
+      const mediaFolder = shouldPublishAsStory
+        ? UPLOAD_FOLDERS.stories
+        : UPLOAD_FOLDERS.portfolio;
+      const mediaUpload = await resolveUploadedFileUrl(mediaFile, {
+        folder: mediaFolder,
+        resourceType: 'auto',
+      });
+      const thumbnailUpload = thumbnailFile
+        ? await resolveUploadedFileUrl(thumbnailFile, {
+            folder: mediaFolder,
+            resourceType: 'image',
+          })
+        : null;
 
       const media = AppDataSource.getRepository(ProviderMedia).create({
         providerId: provider.id,
         serviceId: serviceId || null,
         mediaType: effectiveMediaType,
-        mediaUrl: toPublicUploadPath(mediaFile.path),
-        thumbnailUrl: thumbnailFile ? toPublicUploadPath(thumbnailFile.path) : null,
+        mediaUrl: mediaUpload.secureUrl,
+        thumbnailUrl: thumbnailUpload?.secureUrl || null,
         title: String(title).trim(),
         description: String(description || '').trim() || null,
         isPublished: isPublished !== undefined ? isTruthy(isPublished) : true,
@@ -541,11 +556,11 @@ router.post(
         message: 'Provider media created successfully',
         data: created,
       });
-    } catch {
+    } catch (error) {
       cleanupUploadedPortfolioFiles(req);
       res.status(500).json({
         status: 'error',
-        message: 'Failed to create provider media',
+        message: getUploadErrorMessage(error, 'Failed to create provider media'),
       });
     }
   }
@@ -675,13 +690,24 @@ router.put(
 
       const previousMediaUrl = media.mediaUrl;
       const previousThumbnailUrl = media.thumbnailUrl;
+      const mediaFolder = nextIsStory
+        ? UPLOAD_FOLDERS.stories
+        : UPLOAD_FOLDERS.portfolio;
 
       if (mediaFile) {
-        media.mediaUrl = toPublicUploadPath(mediaFile.path);
+        const mediaUpload = await resolveUploadedFileUrl(mediaFile, {
+          folder: mediaFolder,
+          resourceType: 'auto',
+        });
+        media.mediaUrl = mediaUpload.secureUrl;
       }
 
       if (thumbnailFile) {
-        media.thumbnailUrl = toPublicUploadPath(thumbnailFile.path);
+        const thumbnailUpload = await resolveUploadedFileUrl(thumbnailFile, {
+          folder: mediaFolder,
+          resourceType: 'image',
+        });
+        media.thumbnailUrl = thumbnailUpload.secureUrl;
       }
 
       media.title = title !== undefined ? String(title).trim() : media.title;
@@ -747,11 +773,11 @@ router.put(
         message: 'Provider media updated successfully',
         data: updated,
       });
-    } catch {
+    } catch (error) {
       cleanupUploadedPortfolioFiles(req);
       res.status(500).json({
         status: 'error',
-        message: 'Failed to update provider media',
+        message: getUploadErrorMessage(error, 'Failed to update provider media'),
       });
     }
   }

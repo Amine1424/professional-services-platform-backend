@@ -8,6 +8,7 @@ import ProviderPreference from '../models/ProviderPreference';
 import Service, { ServiceStatus } from '../models/Service';
 import ProviderMedia, { ProviderMediaStoryAudience } from '../models/ProviderMedia';
 import ProviderMediaComment from '../models/ProviderMediaComment';
+import ServiceRequest, { ServiceRequestStatus } from '../models/ServiceRequest';
 import { buildProviderCoverageSummary } from '../utils/algeria';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
     const serviceRepo = AppDataSource.getRepository(Service);
     const mediaRepo = AppDataSource.getRepository(ProviderMedia);
     const commentRepo = AppDataSource.getRepository(ProviderMediaComment);
+    const requestRepo = AppDataSource.getRepository(ServiceRequest);
 
     const provider = await providerRepo.findOne({
       where: { id: providerId },
@@ -109,6 +111,36 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
           collection.findIndex((candidate) => candidate.id === item.id) === index
       );
 
+    const [totalRequests, completedJobs, respondedRequests] = await Promise.all([
+      requestRepo.count({
+        where: {
+          providerId: provider.id,
+        },
+      }),
+      requestRepo.count({
+        where: {
+          providerId: provider.id,
+          status: ServiceRequestStatus.COMPLETED,
+        },
+      }),
+      requestRepo.count({
+        where: {
+          providerId: provider.id,
+          status: In([
+            ServiceRequestStatus.QUOTED,
+            ServiceRequestStatus.ACCEPTED,
+            ServiceRequestStatus.REJECTED,
+            ServiceRequestStatus.IN_PROGRESS,
+            ServiceRequestStatus.COMPLETED,
+            ServiceRequestStatus.CANCELLED,
+          ]),
+        },
+      }),
+    ]);
+
+    const responseRate =
+      totalRequests > 0 ? Math.round((respondedRequests / totalRequests) * 100) : 0;
+
     const mediaIds = media.map((item) => item.id);
 
     const comments = mediaIds.length
@@ -155,6 +187,9 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
           averageRating: provider.averageRating,
           reviewsCount: provider.reviewsCount,
           responseTimeMinutes: provider.responseTimeMinutes,
+          responseRate,
+          completedJobs,
+          createdAt: provider.createdAt,
           isVerified: provider.isVerified,
           status: provider.status,
           primaryCategory: provider.primaryCategory
@@ -175,6 +210,8 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
               : null,
             addressLine:
               preference?.privacyShowAddress ? provider.addressLine : null,
+            website: null,
+            businessHours: null,
           },
           preference: {
             selectedPlan: preference?.selectedPlan || 'basic',
@@ -204,6 +241,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
         })),
         media: media.map((item) => ({
           id: item.id,
+          createdAt: item.createdAt,
           mediaType: item.mediaType,
           mediaUrl: item.mediaUrl,
           thumbnailUrl: item.thumbnailUrl,
@@ -235,6 +273,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: Request, res: Response) =
           providerLocation: [provider.city, provider.wilaya, provider.region]
             .filter(Boolean)
             .join(', '),
+          createdAt: item.createdAt,
           mediaType: item.mediaType,
           mediaUrl: item.mediaUrl,
           thumbnailUrl: item.thumbnailUrl,

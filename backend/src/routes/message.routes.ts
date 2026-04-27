@@ -177,7 +177,7 @@ router.get(
       if (role === 'customer') {
         conversations = await conversationRepo.find({
           where: { customerUserId: userId },
-          relations: ['provider', 'provider.user', 'customer', 'service'],
+          relations: ['provider', 'provider.user', 'provider.primaryCategory', 'customer', 'service', 'service.category'],
           order: {
             lastMessageAt: 'DESC',
             createdAt: 'DESC',
@@ -195,7 +195,7 @@ router.get(
 
         conversations = await conversationRepo.find({
           where: { providerId: provider.id },
-          relations: ['provider', 'provider.user', 'customer', 'service'],
+          relations: ['provider', 'provider.user', 'provider.primaryCategory', 'customer', 'service', 'service.category'],
           order: {
             lastMessageAt: 'DESC',
             createdAt: 'DESC',
@@ -247,6 +247,9 @@ router.get(
               ? {
                   id: conversation.service.id,
                   name: conversation.service.name,
+                  categoryName: conversation.service.category?.name || null,
+                  price: conversation.service.price,
+                  currencyCode: conversation.service.currencyCode,
                 }
               : null,
             provider: {
@@ -255,6 +258,10 @@ router.get(
               avatarUrl: conversation.provider.avatarUrl,
               isVerified: conversation.provider.isVerified,
               profileBadgeText: preference?.profileBadgeText || null,
+              averageRating: conversation.provider.averageRating,
+              reviewsCount: conversation.provider.reviewsCount,
+              responseTimeMinutes: conversation.provider.responseTimeMinutes,
+              primaryCategoryName: conversation.provider.primaryCategory?.name || null,
             },
             customer: {
               id: conversation.customer.id,
@@ -332,6 +339,8 @@ router.post(
         .leftJoinAndSelect('conversation.provider', 'provider')
         .leftJoinAndSelect('conversation.customer', 'customer')
         .leftJoinAndSelect('conversation.service', 'service')
+        .leftJoinAndSelect('provider.primaryCategory', 'primaryCategory')
+        .leftJoinAndSelect('service.category', 'serviceCategory')
         .where('conversation.customer_user_id = :customerUserId', { customerUserId })
         .andWhere('conversation.provider_id = :providerId', { providerId });
 
@@ -390,7 +399,7 @@ router.post(
 
       const result = await conversationRepo.findOne({
         where: { id: conversation.id },
-        relations: ['provider', 'provider.user', 'customer', 'service'],
+        relations: ['provider', 'provider.user', 'provider.primaryCategory', 'customer', 'service', 'service.category'],
       });
 
       res.status(200).json({

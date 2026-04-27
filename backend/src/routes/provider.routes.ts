@@ -12,16 +12,18 @@ import { ProviderPlan, ProviderPreference } from '../models/ProviderPreference';
 import { Service, ServiceStatus } from '../models/Service';
 import { User } from '../models/User';
 import { HashService } from '../services/auth/hashService';
-import { buildProviderCoverageSummary } from '../utils/algeria';
 import {
-  createDiskUpload,
-  imageOnlyFilter,
-  removeLocalUploadByUrl,
-  toPublicUploadPath,
-} from '../utils/uploads';
+  cleanupLocalUploadedFile,
+  createUploadMiddleware,
+  getUploadErrorMessage,
+  resolveUploadedFileUrl,
+  UPLOAD_FOLDERS,
+} from '../services/upload.service';
+import { buildProviderCoverageSummary } from '../utils/algeria';
+import { imageOnlyFilter, removeLocalUploadByUrl } from '../utils/uploads';
 
 const router = Router();
-const providerProfileUpload = createDiskUpload(
+const providerProfileUpload = createUploadMiddleware(
   (req) => ['providers', req.user?.userId || 'anonymous', 'profile'],
   imageOnlyFilter
 );
@@ -37,11 +39,11 @@ const cleanupProviderProfileUploads = (req: Request) => {
   const coverFile = files?.coverFile?.[0];
 
   if (avatarFile) {
-    removeLocalUploadByUrl(toPublicUploadPath(avatarFile.path));
+    cleanupLocalUploadedFile(avatarFile);
   }
 
   if (coverFile) {
-    removeLocalUploadByUrl(toPublicUploadPath(coverFile.path));
+    cleanupLocalUploadedFile(coverFile);
   }
 };
 
@@ -413,11 +415,19 @@ router.post(
       const previousCoverUrl = provider.coverUrl;
 
       if (avatarFile) {
-        provider.avatarUrl = toPublicUploadPath(avatarFile.path);
+        const avatarUpload = await resolveUploadedFileUrl(avatarFile, {
+          folder: UPLOAD_FOLDERS.providers,
+          resourceType: 'image',
+        });
+        provider.avatarUrl = avatarUpload.secureUrl;
       }
 
       if (coverFile) {
-        provider.coverUrl = toPublicUploadPath(coverFile.path);
+        const coverUpload = await resolveUploadedFileUrl(coverFile, {
+          folder: UPLOAD_FOLDERS.providers,
+          resourceType: 'image',
+        });
+        provider.coverUrl = coverUpload.secureUrl;
       }
 
       await providerRepository.save(provider);
@@ -438,11 +448,11 @@ router.post(
           coverUrl: provider.coverUrl,
         },
       });
-    } catch {
+    } catch (error) {
       cleanupProviderProfileUploads(req);
       res.status(500).json({
         status: 'error',
-        message: 'Failed to upload provider media',
+        message: getUploadErrorMessage(error, 'Failed to upload provider media'),
       });
     }
   }

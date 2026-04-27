@@ -86,10 +86,30 @@ export const WILAYA_TO_REGION: Record<string, string> = {
 
 export const normalizeGeoValue = (value?: string | null) => String(value || '').trim().toLowerCase();
 
+const MARKET_REGION_SET = new Set(MARKET_REGIONS.map(normalizeGeoValue));
+
+const dedupeGeoValues = (values: Array<string | null | undefined>) => {
+  const seen = new Set<string>();
+
+  return values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const normalized = normalizeGeoValue(value);
+
+      if (seen.has(normalized)) {
+        return false;
+      }
+
+      seen.add(normalized);
+      return true;
+    });
+};
+
 export const resolveRegionFromWilaya = (wilaya?: string | null) =>
   wilaya ? WILAYA_TO_REGION[String(wilaya).trim()] || null : null;
 
-export const getProviderCoverageRegions = (
+const getProviderCoverageSelections = (
   provider: Pick<
     ServiceProvider,
     'serviceCoverageMode' | 'serviceCoverageRegions' | 'region' | 'wilaya'
@@ -100,11 +120,51 @@ export const getProviderCoverageRegions = (
   }
 
   if (provider.serviceCoverageMode === ProviderCoverageMode.REGIONAL) {
-    return (provider.serviceCoverageRegions || []).filter(Boolean);
+    return dedupeGeoValues(provider.serviceCoverageRegions || []);
   }
 
   const inferredRegion = provider.region || resolveRegionFromWilaya(provider.wilaya);
   return inferredRegion ? [inferredRegion] : [];
+};
+
+const getProviderCoverageResolvedRegions = (
+  provider: Pick<
+    ServiceProvider,
+    'serviceCoverageMode' | 'serviceCoverageRegions' | 'region' | 'wilaya'
+  >
+) => {
+  const selections = getProviderCoverageSelections(provider);
+
+  if (provider.serviceCoverageMode !== ProviderCoverageMode.REGIONAL) {
+    return selections;
+  }
+
+  return dedupeGeoValues(
+    selections.map((selection) =>
+      MARKET_REGION_SET.has(normalizeGeoValue(selection))
+        ? selection
+        : resolveRegionFromWilaya(selection)
+    )
+  );
+};
+
+const getProviderCoverageSelectedWilayas = (
+  provider: Pick<
+    ServiceProvider,
+    'serviceCoverageMode' | 'serviceCoverageRegions' | 'region' | 'wilaya'
+  >
+) => {
+  if (provider.serviceCoverageMode !== ProviderCoverageMode.REGIONAL) {
+    return [];
+  }
+
+  return dedupeGeoValues(
+    getProviderCoverageSelections(provider).filter(
+      (selection) =>
+        !MARKET_REGION_SET.has(normalizeGeoValue(selection)) &&
+        Boolean(resolveRegionFromWilaya(selection))
+    )
+  );
 };
 
 export const providerMatchesGeoFilters = (
@@ -117,7 +177,9 @@ export const providerMatchesGeoFilters = (
   const normalizedRegion = normalizeGeoValue(filters.region);
   const normalizedWilaya = normalizeGeoValue(filters.wilaya);
   const normalizedLocation = normalizeGeoValue(filters.location);
-  const providerRegions = getProviderCoverageRegions(provider).map(normalizeGeoValue);
+  const providerSelections = getProviderCoverageSelections(provider).map(normalizeGeoValue);
+  const providerRegions = getProviderCoverageResolvedRegions(provider).map(normalizeGeoValue);
+  const providerSelectedWilayas = getProviderCoverageSelectedWilayas(provider).map(normalizeGeoValue);
   const providerRegion = normalizeGeoValue(
     provider.region || resolveRegionFromWilaya(provider.wilaya)
   );
@@ -139,6 +201,7 @@ export const providerMatchesGeoFilters = (
     !normalizedWilaya ||
     isNationwide ||
     providerWilaya === normalizedWilaya ||
+    providerSelectedWilayas.includes(normalizedWilaya) ||
     (provider.serviceCoverageMode === ProviderCoverageMode.REGIONAL &&
       Boolean(targetRegionFromWilaya) &&
       providerRegions.includes(targetRegionFromWilaya));
@@ -149,6 +212,7 @@ export const providerMatchesGeoFilters = (
       value.includes(normalizedLocation)
     ) ||
     (isNationwide && Boolean(normalizedLocation)) ||
+    providerSelections.some((value) => value.includes(normalizedLocation)) ||
     providerRegions.some((value) => value.includes(normalizedLocation));
 
   return matchesRegion && matchesWilaya && matchesLocation;
@@ -160,29 +224,29 @@ export const buildProviderCoverageSummary = (
     'serviceCoverageMode' | 'serviceCoverageRegions' | 'region' | 'wilaya'
   >
 ) => {
-  const coverageRegions = getProviderCoverageRegions(provider);
+  const coverageSelections = getProviderCoverageSelections(provider);
 
   if (provider.serviceCoverageMode === ProviderCoverageMode.NATIONWIDE) {
     return {
       mode: ProviderCoverageMode.NATIONWIDE,
       label: 'كل الجزائر',
-      regions: coverageRegions,
+      regions: coverageSelections,
     };
   }
 
   if (provider.serviceCoverageMode === ProviderCoverageMode.REGIONAL) {
     return {
       mode: ProviderCoverageMode.REGIONAL,
-      label: coverageRegions.length
-        ? coverageRegions.join(' • ')
+      label: coverageSelections.length
+        ? coverageSelections.join(' • ')
         : provider.region || 'تغطية جهوية',
-      regions: coverageRegions,
+      regions: coverageSelections,
     };
   }
 
   return {
     mode: ProviderCoverageMode.WILAYA_ONLY,
     label: provider.wilaya || provider.region || 'داخل الولاية فقط',
-    regions: coverageRegions,
+    regions: coverageSelections,
   };
 };
