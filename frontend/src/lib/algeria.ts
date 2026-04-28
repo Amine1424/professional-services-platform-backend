@@ -154,6 +154,46 @@ export const WILAYA_TO_REGION: Record<string, string> = {
   'El Aricha': 'غرب الوسط',
 };
 
+export const MARKET_REGION_TO_WILAYAS = MARKET_REGIONS.reduce<Record<string, string[]>>(
+  (accumulator, region) => {
+    accumulator[region] = Object.entries(WILAYA_TO_REGION)
+      .filter(([, mappedRegion]) => mappedRegion === region)
+      .map(([wilaya]) => wilaya)
+      .sort((left, right) =>
+        left.localeCompare(right, 'en', {
+          sensitivity: 'base',
+          numeric: true,
+        })
+      );
+
+    return accumulator;
+  },
+  {}
+);
+
+export const getWilayasForRegion = (region?: string | null) =>
+  region ? MARKET_REGION_TO_WILAYAS[String(region).trim()] || [] : [];
+
+export const expandCoverageSelectionsToWilayas = (selections?: string[] | null) => {
+  const expanded = (selections || [])
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .flatMap((item) => getWilayasForRegion(item).length ? getWilayasForRegion(item) : [item]);
+
+  const seen = new Set<string>();
+
+  return expanded.filter((item) => {
+    const key = item.trim().toLowerCase();
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
 export type ProviderCoverageMode = 'wilaya_only' | 'regional' | 'nationwide';
 
 export interface ProviderCoverageSummary {

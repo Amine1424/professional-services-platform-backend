@@ -1,10 +1,16 @@
-import React from 'react';
-import { ExternalLink, MapPin, Navigation } from 'lucide-react';
-import { useI18n } from '../../i18n';
+import React, { useMemo } from 'react';
 import {
-  buildGoogleMapsSearchUrl,
-  estimateTravelLabel,
-} from '../../lib/algeria';
+  Calendar,
+  Clock,
+  ExternalLink,
+  Globe,
+  Mail,
+  MapPin,
+  Navigation,
+  Phone,
+} from 'lucide-react';
+import { useI18n } from '../../i18n';
+import { buildGoogleMapsSearchUrl } from '../../lib/algeria';
 import { PublicProviderPayload } from './types';
 
 interface ProviderProfileDetailsProps {
@@ -16,124 +22,169 @@ interface ProviderProfileDetailsProps {
   };
 }
 
+const formatMemberSince = (value?: string | null, locale = 'en-GB') => {
+  if (!value) return '';
+
+  return new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(value));
+};
+
 const ProviderProfileDetails: React.FC<ProviderProfileDetailsProps> = ({
   provider,
   providerLocation,
-  customerGeo,
 }) => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   const mapsQuery = `${provider.companyName} ${provider.city || ''} ${provider.wilaya || ''} Algeria`.trim();
-  const travelEstimate = estimateTravelLabel({
-    providerCoverageMode: provider.serviceCoverage.mode,
-    providerWilaya: provider.wilaya,
-    providerRegion: provider.region,
-    customerWilaya: customerGeo?.preferredWilaya,
-    customerRegion: customerGeo?.preferredRegion,
-  });
+  const memberSinceLabel = formatMemberSince(provider.createdAt, locale);
+  const coverageAreas = useMemo(() => {
+    const regions = provider.serviceCoverage.regions || [];
+    if (regions.length) {
+      return regions;
+    }
+
+    return [provider.city, provider.wilaya, provider.region].filter(Boolean) as string[];
+  }, [provider.city, provider.region, provider.serviceCoverage.regions, provider.wilaya]);
 
   return (
-    <section id="provider-reach" className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-      <article className="psp-surface">
-        <div className="psp-surface__header">
-          <div>
-            <h2>{t('Operational details')}</h2>
-            <div className="psp-surface__sub">
-              {t(
-                'Keep booking context, coverage, and contact visibility in one compact support block.'
-              )}
-            </div>
-          </div>
-        </div>
+    <section id="provider-support" className="mb-10 border-t border-slate-200 py-10">
+      <h2 className="mb-6 text-xl font-semibold text-slate-950">{t('Business Details')}</h2>
 
-        <div className="psp-detail-grid">
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">{t('Primary category')}</div>
-            <div className="psp-detail-item__value">
-              {provider.primaryCategory?.name || t('Not specified')}
-            </div>
-          </div>
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">{t('Base location')}</div>
-            <div className="psp-detail-item__value">{providerLocation}</div>
-          </div>
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">{t('Service coverage')}</div>
-            <div className="psp-detail-item__value">{provider.serviceCoverage.label}</div>
-          </div>
-          <div className="psp-detail-item">
-            <div className="psp-detail-item__label">{t('Travel estimate')}</div>
-            <div className="psp-detail-item__value">{travelEstimate}</div>
-          </div>
-        </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-medium uppercase tracking-[0.14em] text-slate-500">
+            {t('Contact Information')}
+          </h3>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
-          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Email')}
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <Clock size={18} className="mt-0.5 shrink-0 text-slate-400" />
+              <div>
+                <div className="text-sm text-slate-500">{t('Response time')}</div>
+                <div className="font-medium text-slate-950">
+                  {provider.responseTimeMinutes
+                    ? `${provider.responseTimeMinutes} ${t('min')}`
+                    : t('Not shared')}
+                </div>
+              </div>
             </div>
-            <div className="mt-2 text-sm font-semibold text-slate-700">
-              {provider.contact.email || t('Hidden')}
-            </div>
-          </div>
-          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Phone')}
-            </div>
-            <div className="mt-2 text-sm font-semibold text-slate-700">
-              {provider.contact.phoneNumber || t('Hidden')}
-            </div>
-          </div>
-          <div className="rounded-[22px] bg-slate-50 px-4 py-4">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Address')}
-            </div>
-            <div className="mt-2 text-sm font-semibold text-slate-700">
-              {provider.contact.addressLine || t('Hidden')}
-            </div>
-          </div>
-        </div>
-      </article>
 
-      <article className="psp-surface">
-        <div className="psp-surface__header">
-          <div>
-            <h2>{t('Location handoff')}</h2>
-            <div className="psp-surface__sub">
-              {t(
-                'Use map handoff only when visit planning or on-site scope matters.'
-              )}
+            {provider.contact.phoneNumber ? (
+              <div className="flex items-start gap-3">
+                <Phone size={18} className="mt-0.5 shrink-0 text-slate-400" />
+                <div>
+                  <div className="text-sm text-slate-500">{t('Phone')}</div>
+                  <a
+                    href={`tel:${provider.contact.phoneNumber}`}
+                    className="font-medium text-slate-950 transition hover:text-blue-600"
+                  >
+                    {provider.contact.phoneNumber}
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            {provider.contact.email ? (
+              <div className="flex items-start gap-3">
+                <Mail size={18} className="mt-0.5 shrink-0 text-slate-400" />
+                <div>
+                  <div className="text-sm text-slate-500">{t('Email')}</div>
+                  <a
+                    href={`mailto:${provider.contact.email}`}
+                    className="font-medium text-slate-950 transition hover:text-blue-600"
+                  >
+                    {provider.contact.email}
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            {provider.contact.website ? (
+              <div className="flex items-start gap-3">
+                <Globe size={18} className="mt-0.5 shrink-0 text-slate-400" />
+                <div>
+                  <div className="text-sm text-slate-500">{t('Website')}</div>
+                  <a
+                    href={provider.contact.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-medium text-slate-950 transition hover:text-blue-600"
+                  >
+                    {provider.contact.website}
+                    <ExternalLink size={13} />
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            {memberSinceLabel ? (
+              <div className="flex items-start gap-3 border-t border-slate-200 pt-4">
+                <Calendar size={18} className="mt-0.5 shrink-0 text-slate-400" />
+                <div>
+                  <div className="text-sm text-slate-500">{t('Member Since')}</div>
+                  <div className="font-medium text-slate-950">{memberSinceLabel}</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-medium uppercase tracking-[0.14em] text-slate-500">
+            {t('Service Area')}
+          </h3>
+
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <MapPin size={18} className="mt-0.5 shrink-0 text-slate-400" />
+              <div>
+                <div className="text-sm text-slate-500">{t('Based in')}</div>
+                <div className="font-medium text-slate-950">{providerLocation}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm text-slate-500">{t('Service Coverage')}</div>
+              <div className="flex flex-wrap gap-2">
+                {coverageAreas.length ? (
+                  coverageAreas.map((area) => (
+                    <span
+                      key={area}
+                      className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                    >
+                      {area}
+                    </span>
+                  ))
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {provider.serviceCoverage.label}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="relative mt-4 overflow-hidden rounded-xl bg-slate-100">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-100" />
+              <div className="relative flex aspect-[16/9] flex-col items-center justify-center p-6 text-center">
+                <MapPin size={28} className="mb-2 text-blue-600" />
+                <p className="text-sm text-slate-500">{providerLocation}</p>
+                <a
+                  href={buildGoogleMapsSearchUrl(mapsQuery)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                >
+                  <Navigation size={14} />
+                  {t('Open in Maps')}
+                  <ExternalLink size={13} />
+                </a>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] p-5">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
-            <MapPin size={13} />
-            {t('Map destination')}
-          </div>
-          <div className="mt-4 text-[24px] font-black tracking-tight text-slate-900">
-            {provider.companyName}
-          </div>
-          <div className="mt-2 text-sm leading-7 text-slate-600">{providerLocation}</div>
-          <div className="mt-4 text-sm leading-7 text-slate-600">
-            {t(
-              'Open external navigation only when the customer needs to validate an on-site visit or travel fit.'
-            )}
-          </div>
-        </div>
-
-        <a
-          href={buildGoogleMapsSearchUrl(mapsQuery)}
-          target="_blank"
-          rel="noreferrer"
-          className="psp-button psp-button--secondary mt-5"
-        >
-          <Navigation size={16} />
-          <ExternalLink size={14} />
-          {t('Open in Google Maps')}
-        </a>
-      </article>
+        </article>
+      </div>
     </section>
   );
 };

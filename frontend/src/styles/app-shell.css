@@ -66,6 +66,14 @@
   min-height: 100vh;
 }
 
+.psp-app-shell--standalone .psp-app-shell__layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.psp-app-shell--fullbleed .psp-app-shell__layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .psp-app-shell__sidebar {
   position: sticky;
   top: 0;
@@ -281,6 +289,24 @@
   padding: 28px;
 }
 
+.psp-app-shell--standalone .psp-app-shell__main {
+  padding: 28px 32px 40px;
+}
+
+.psp-app-shell--fullbleed .psp-app-shell__main {
+  padding: 0;
+}
+
+.psp-app-shell--standalone .psp-app-shell__content {
+  max-width: 100%;
+  gap: 0;
+}
+
+.psp-app-shell--fullbleed .psp-app-shell__content {
+  max-width: 100%;
+  gap: 0;
+}
+
 .psp-app-shell__topbar {
   display: flex;
   align-items: center;
@@ -416,6 +442,14 @@
 @media (max-width: 720px) {
   .psp-app-shell__main {
     padding: 18px;
+  }
+
+  .psp-app-shell--standalone .psp-app-shell__main {
+    padding: 18px;
+  }
+
+  .psp-app-shell--fullbleed .psp-app-shell__main {
+    padding: 0;
   }
 
   .psp-app-shell__topbar {

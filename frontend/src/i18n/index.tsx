@@ -332,6 +332,18 @@ const TRANSLATIONS: Record<'ar' | 'fr', Record<string, string>> = {
 Object.assign(TRANSLATIONS.ar, {
   'Customer home is unavailable.': 'الصفحة الرئيسية للزبون غير متاحة.',
   'No customer feed data is available yet.': 'لا توجد بيانات متاحة لواجهة الزبون بعد.',
+  'Good morning': 'صباح الخير',
+  'Good afternoon': 'مساء الخير',
+  'Good evening': 'مساء الخير',
+  there: 'هناك',
+  'Continue where you left off or explore new services':
+    'واصل من حيث توقفت أو استكشف خدمات جديدة',
+  'Explore services': 'استكشف الخدمات',
+  'Find trusted professionals': 'ابحث عن مهنيين موثوقين',
+  'Continue provider conversations': 'واصل محادثات المزودين',
+  'Track quotes and provider replies': 'تابع عروض السعر وردود المزودين',
+  'Reopen saved providers': 'أعد فتح المزودين المحفوظين',
+  'Check replies and activity': 'راجع الردود والنشاط',
   'Live marketplace view': 'عرض حي للسوق',
   'Browse real businesses, recent works, and public trust signals before you engage':
     'تصفح الأعمال الحقيقية وأحدث النماذج وإشارات الثقة العامة قبل أن تبدأ.',
@@ -357,6 +369,40 @@ Object.assign(TRANSLATIONS.ar, {
   'Recent images and videos showing what providers are actively publishing.':
     'صور وفيديوهات حديثة تُظهر ما ينشره المزودون الآن.',
   'Recent review signals': 'إشارات تقييم حديثة',
+  'Stories from providers': 'قصص من المزودين',
+  'See all': 'عرض الكل',
+  'View more': 'عرض المزيد',
+  'Provider update': 'تحديث من المزود',
+  Video: 'فيديو',
+  Story: 'قصة',
+  Public: 'عام',
+  Fav: 'مفضل',
+  'Featured services': 'خدمات مميزة',
+  'Browse all': 'تصفح الكل',
+  scope: 'حسب النطاق',
+  'Trusted provider': 'مزود موثوق',
+  'No featured provider is available right now.': 'لا يوجد مزود مميز متاح الآن.',
+  'Response time not shared yet': 'لم يتم عرض زمن الرد بعد',
+  min: 'دق',
+  hours: 'ساعات',
+  '< 1 hour': 'أقل من ساعة',
+  'Typically responds in': 'يرد عادة في',
+  'View profile': 'اعرض الملف',
+  Contact: 'تواصل',
+  'Recent reviews': 'آخر التقييمات',
+  'Why sign in now': 'لماذا تسجل الدخول الآن',
+  'Reopen saved providers and active conversations without losing context.':
+    'أعد فتح المزودين المحفوظين والمحادثات النشطة دون فقدان السياق.',
+  'Return to the same search and request flow you were already following.':
+    'عُد إلى نفس مسار البحث والطلب الذي كنت تتابعه بالفعل.',
+  'Keep your marketplace activity secure with one account across all surfaces.':
+    'حافظ على نشاطك في السوق آمنًا بحساب واحد عبر جميع الواجهات.',
+  'Search with categories, regions, and provider trust signals.':
+    'ابحث باستخدام التصنيفات والجهات وإشارات الثقة الخاصة بالمزودين.',
+  'Keep trusted providers close and return quickly when you are ready.':
+    'احتفظ بالمزودين الموثوقين قريبًا وارجع بسرعة عندما تكون جاهزًا.',
+  'Move from trust and conversation into a real service request.':
+    'انتقل من الثقة والمحادثة إلى طلب خدمة فعلي.',
   'Public customer feedback that keeps the marketplace feeling alive.':
     'ملاحظات عامة من الزبائن تبقي السوق حيًا.',
   'Marketplace is active now': 'السوق نشط الآن',
@@ -428,6 +474,18 @@ Object.assign(TRANSLATIONS.ar, {
 Object.assign(TRANSLATIONS.fr, {
   'Customer home is unavailable.': 'La page d’accueil client est indisponible.',
   'No customer feed data is available yet.': 'Aucune donnée client n’est encore disponible.',
+  'Good morning': 'Bonjour',
+  'Good afternoon': 'Bon après-midi',
+  'Good evening': 'Bonsoir',
+  there: 'vous',
+  'Continue where you left off or explore new services':
+    'Reprenez là où vous vous êtes arrêté ou explorez de nouveaux services',
+  'Explore services': 'Explorer les services',
+  'Find trusted professionals': 'Trouver des professionnels fiables',
+  'Continue provider conversations': 'Reprendre les conversations avec les prestataires',
+  'Track quotes and provider replies': 'Suivre les devis et les réponses des prestataires',
+  'Reopen saved providers': 'Rouvrir les prestataires enregistrés',
+  'Check replies and activity': 'Vérifier les réponses et l’activité',
   'Live marketplace view': 'Vue vivante de la marketplace',
   'Explore providers': 'Explorer les prestataires',
   'Open messages': 'Ouvrir les messages',
@@ -439,6 +497,41 @@ Object.assign(TRANSLATIONS.fr, {
   'Fast conversion': 'Conversion rapide',
   'Visible providers': 'Prestataires visibles',
   'Recent review signals': 'Signaux d’avis récents',
+  'Stories from providers': 'Stories des prestataires',
+  'See all': 'Voir tout',
+  'View more': 'Voir plus',
+  'Provider update': 'Mise à jour prestataire',
+  Video: 'Vidéo',
+  Story: 'Story',
+  Public: 'Public',
+  Fav: 'Fav',
+  'Featured services': 'Services mis en avant',
+  'Browse all': 'Tout parcourir',
+  scope: 'portée',
+  'Trusted provider': 'Prestataire de confiance',
+  'No featured provider is available right now.':
+    'Aucun prestataire mis en avant n’est disponible pour le moment.',
+  'Response time not shared yet': 'Temps de réponse non communiqué',
+  min: 'min',
+  hours: 'heures',
+  '< 1 hour': '< 1 heure',
+  'Typically responds in': 'Répond généralement en',
+  'View profile': 'Voir le profil',
+  Contact: 'Contacter',
+  'Recent reviews': 'Avis récents',
+  'Why sign in now': 'Pourquoi se connecter maintenant',
+  'Reopen saved providers and active conversations without losing context.':
+    'Rouvrez vos prestataires enregistres et vos conversations actives sans perdre le contexte.',
+  'Return to the same search and request flow you were already following.':
+    'Revenez au meme parcours de recherche et de demande que vous suiviez deja.',
+  'Keep your marketplace activity secure with one account across all surfaces.':
+    'Gardez votre activite marketplace securisee avec un seul compte sur toutes les surfaces.',
+  'Search with categories, regions, and provider trust signals.':
+    'Recherchez avec les categories, les regions et les signaux de confiance des prestataires.',
+  'Keep trusted providers close and return quickly when you are ready.':
+    'Gardez les prestataires de confiance a portee et revenez vite quand vous etes pret.',
+  'Move from trust and conversation into a real service request.':
+    'Passez de la confiance et de la conversation a une vraie demande de service.',
   'Marketplace is active now': 'La marketplace est active maintenant',
   'Provider dashboard unavailable.': 'Le tableau prestataire est indisponible.',
   'Provider dashboard data is not available.':
@@ -1646,6 +1739,38 @@ Object.assign(TRANSLATIONS.ar, {
   'Accept quote': "قبول العرض",
   'Reject quote': "رفض العرض",
   'Cancel request': "إلغاء الطلب",
+  'Awaiting Quote': "بانتظار العرض",
+  'Under Review': "قيد المراجعة",
+  'Quote Ready': "العرض جاهز",
+  'Quote': "العرض",
+  'Updated': "آخر تحديث",
+  'Request submitted': "تم إرسال الطلب",
+  'You': "أنت",
+  'Service price': "سعر الخدمة",
+  'The provider is reviewing your request. You will see the next commercial update here.':
+    "المزوّد يراجع طلبك الآن. سترى التحديث التجاري التالي هنا.",
+  'Work in Progress': "العمل قيد التنفيذ",
+  'Quote accepted': "تم قبول العرض",
+  'Request Completed': "اكتمل الطلب",
+  'This request has been completed successfully.': "اكتمل هذا الطلب بنجاح.",
+  'Quote rejected': "تم رفض العرض",
+  'This quote was rejected and is no longer active.': "تم رفض هذا العرض ولم يعد نشطًا.",
+  'Request Cancelled': "تم إلغاء الطلب",
+  'This request was cancelled and is no longer active.': "تم إلغاء هذا الطلب ولم يعد نشطًا.",
+  'No requests found': "لا توجد طلبات.",
+  'Your Note': "ملاحظتك",
+  'Add a personal note about this request...': "أضف ملاحظة شخصية حول هذا الطلب...",
+  'Saving...': "جارٍ الحفظ...",
+  'Save Note': "حفظ الملاحظة",
+  'Note saved.': "تم حفظ الملاحظة.",
+  'Request Timeline': "الخط الزمني للطلب",
+  'Loading timeline...': "جارٍ تحميل الخط الزمني...",
+  'Request Details': "تفاصيل الطلب",
+  'Are you sure you want to reject this quote? You can still continue the conversation with the provider.':
+    "هل أنت متأكد من رفض هذا العرض؟ لا يزال بإمكانك متابعة المحادثة مع المزوّد.",
+  'Are you sure you want to cancel this request? This action cannot be undone.':
+    "هل أنت متأكد من إلغاء هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.",
+  'Response time not shared': "زمن الرد غير معلن",
   'Reviewer dashboard unavailable.': "لوحة المراجع غير متاحة.",
   'Reviewer operations desk': "مكتب عمليات المراجع",
   'Immediate focus': "التركيز الفوري",
@@ -1773,6 +1898,38 @@ Object.assign(TRANSLATIONS.fr, {
   'Accept quote': "Accepter le devis",
   'Reject quote': "Refuser le devis",
   'Cancel request': "Annuler la demande",
+  'Awaiting Quote': "En attente du devis",
+  'Under Review': "En revue",
+  'Quote Ready': "Devis pret",
+  'Quote': "Devis",
+  'Updated': "Mis a jour",
+  'Request submitted': "Demande envoyee",
+  'You': "Vous",
+  'Service price': "Prix du service",
+  'The provider is reviewing your request. You will see the next commercial update here.':
+    "Le prestataire examine votre demande. Vous verrez ici la prochaine mise a jour commerciale.",
+  'Work in Progress': "Travail en cours",
+  'Quote accepted': "Devis accepte",
+  'Request Completed': "Demande terminee",
+  'This request has been completed successfully.': "Cette demande a ete terminee avec succes.",
+  'Quote rejected': "Devis refuse",
+  'This quote was rejected and is no longer active.': "Ce devis a ete refuse et n est plus actif.",
+  'Request Cancelled': "Demande annulee",
+  'This request was cancelled and is no longer active.': "Cette demande a ete annulee et n est plus active.",
+  'No requests found': "Aucune demande trouvee.",
+  'Your Note': "Votre note",
+  'Add a personal note about this request...': "Ajoutez une note personnelle sur cette demande...",
+  'Saving...': "Enregistrement...",
+  'Save Note': "Enregistrer la note",
+  'Note saved.': "Note enregistree.",
+  'Request Timeline': "Chronologie de la demande",
+  'Loading timeline...': "Chargement de la chronologie...",
+  'Request Details': "Details de la demande",
+  'Are you sure you want to reject this quote? You can still continue the conversation with the provider.':
+    "Voulez-vous vraiment refuser ce devis ? Vous pouvez toujours poursuivre la conversation avec le prestataire.",
+  'Are you sure you want to cancel this request? This action cannot be undone.':
+    "Voulez-vous vraiment annuler cette demande ? Cette action est irreversible.",
+  'Response time not shared': "Temps de reponse non communique",
   'Reviewer dashboard unavailable.': "Tableau de bord relecteur indisponible.",
   'Reviewer operations desk': "Poste operationnel relecteur",
   'Immediate focus': "Priorite immediate",
@@ -2391,6 +2548,27 @@ Object.assign(TRANSLATIONS.fr, {
 });
 
 Object.assign(TRANSLATIONS.ar, {
+  Back: 'رجوع',
+  Saved: 'محفوظ',
+  'Save provider': 'احفظ المزوّد',
+  'View stories': 'عرض القصص',
+  'Message provider': 'راسل المزوّد',
+  'Request a Quote': 'اطلب عرض سعر',
+  'Business Details': 'تفاصيل النشاط',
+  'Recent Updates': 'آخر التحديثات',
+  'Show less': 'عرض أقل',
+  'Trusted local professional services': 'خدمات مهنية محلية موثوقة',
+  'Responds in under an hour': 'يرد خلال أقل من ساعة',
+  'Responds in under a few hours': 'يرد خلال بضع ساعات',
+  'Response time available on request': 'مدة الرد متاحة عند الطلب',
+  'jobs completed': 'مهام مكتملة',
+  'Managed by': 'بإدارة',
+  'Professional provider account': 'حساب مزود مهني',
+  'No professional summary has been added yet.': 'لم تتم إضافة نبذة مهنية بعد.',
+  'Recently joined': 'انضم مؤخرًا',
+  'Provider page': 'صفحة المزود',
+  story: 'قصة',
+  stories: 'قصص',
   'Provider page unavailable.': 'صفحة المزود غير متاحة.',
   'This provider could not be found.': 'تعذر العثور على هذا المزود.',
   'Back to Explore': 'العودة إلى الاستكشاف',
@@ -2483,6 +2661,28 @@ Object.assign(TRANSLATIONS.ar, {
 });
 
 Object.assign(TRANSLATIONS.fr, {
+  Back: 'Retour',
+  Saved: 'Enregistre',
+  'Save provider': 'Enregistrer le prestataire',
+  'View stories': 'Voir les stories',
+  'Message provider': 'Contacter le prestataire',
+  'Request a Quote': 'Demander un devis',
+  'Business Details': 'Details de l activite',
+  'Recent Updates': 'Mises a jour recentes',
+  'Show less': 'Voir moins',
+  'Trusted local professional services': 'Services professionnels locaux de confiance',
+  'Responds in under an hour': 'Repond en moins d une heure',
+  'Responds in under a few hours': 'Repond en quelques heures',
+  'Response time available on request': 'Delai de reponse disponible sur demande',
+  'jobs completed': 'missions terminees',
+  'Managed by': 'Gere par',
+  'Professional provider account': 'Compte prestataire professionnel',
+  'No professional summary has been added yet.':
+    'Aucun resume professionnel n a encore ete ajoute.',
+  'Recently joined': 'A rejoint recemment',
+  'Provider page': 'Page prestataire',
+  story: 'story',
+  stories: 'stories',
   'Provider page unavailable.': 'Page prestataire indisponible.',
   'This provider could not be found.': 'Ce prestataire est introuvable.',
   'Back to Explore': 'Retour a Explorer',
@@ -3077,6 +3277,196 @@ Object.assign(TRANSLATIONS.fr, {
   'Public — everyone can see it': 'Public — tout le monde peut la voir',
   'Favorites only — only customers who favorited you':
     'Favoris seulement — clients qui vous ont mis en favoris',
+});
+
+Object.assign(TRANSLATIONS.ar, {
+  Back: 'رجوع',
+  'Provider control desk': 'مكتب تحكم المزود',
+  'This page keeps requests, inbox pressure, public readiness, and visibility levers in one operational surface.':
+    'هذه الصفحة تجمع الطلبات وضغط صندوق الوارد والجاهزية العامة وعناصر الظهور في سطح تشغيلي واحد.',
+  'Next action': 'الإجراء التالي',
+  'Requests waiting for a first response should always come first.':
+    'الطلبات التي تنتظر أول رد يجب أن تأتي أولًا دائمًا.',
+  'Account status still affects public visibility and readiness.':
+    'حالة الحساب ما تزال تؤثر على الظهور العام والجاهزية.',
+  'Unread conversations still hold commercial context that can convert into booked work.':
+    'المحادثات غير المقروءة ما تزال تحمل سياقًا تجاريًا يمكن أن يتحول إلى عمل مؤكد.',
+  'Public trust gaps still slow conversion before customers even message or request.':
+    'فجوات الثقة العامة ما تزال تبطئ التحويل حتى قبل أن يراسل العميل أو يرسل طلبًا.',
+  'Draft services should become published offers or be cleaned out of the workspace.':
+    'الخدمات المسودة يجب أن تتحول إلى عروض منشورة أو تُزال من مساحة العمل.',
+  'Proof of work still needs stronger coverage across portfolio and stories.':
+    'إثبات العمل ما يزال يحتاج تغطية أقوى عبر المعرض والقصص.',
+  'The operational workspace is healthy. Stay close to fresh demand and follow-up.':
+    'مساحة العمل التشغيلية بحالة جيدة. ابق قريبًا من الطلبات الجديدة والمتابعة.',
+  'Pending requests': 'طلبات معلقة',
+  'Requests waiting for a first response.': 'طلبات تنتظر أول رد.',
+  'Unread messages': 'رسائل غير مقروءة',
+  'Customer threads still unread in the inbox.': 'خيوط العملاء ما تزال غير مقروءة في صندوق الوارد.',
+  'Account status still needs provider attention.': 'حالة الحساب ما تزال تحتاج تدخل المزود.',
+  'Public readiness blockers': 'عوائق الجاهزية العامة',
+  'Public profile still has visible trust gaps.': 'الملف العام ما يزال يحتوي على فجوات ثقة ظاهرة.',
+  'New leads, quoted work, and delivery follow-up.': 'العملاء الجدد والعروض والمتابعة التنفيذية.',
+  'Unread customer threads and reply pressure.': 'خيوط العملاء غير المقروءة وضغط الرد.',
+  'Stories, proof of work, likes, comments, and drafts.': 'القصص وإثبات العمل والإعجابات والتعليقات والمسودات.',
+  'Published offers, drafts, and featured service positioning.':
+    'العروض المنشورة والمسودات وتموضع الخدمات المميزة.',
+  'Identity, moderation fields, and public trust basics.':
+    'الهوية وحقول المراجعة وأساسيات الثقة العامة.',
+  Ready: 'جاهز',
+  'Almost ready': 'قريب من الجاهزية',
+  'Needs work': 'يحتاج عملًا',
+  'The public profile already carries enough trust signal to support conversion.':
+    'الملف العام يحمل بالفعل ما يكفي من إشارات الثقة لدعم التحويل.',
+  'A few visible gaps still weaken trust, moderation clarity, or conversion.':
+    'بعض الفجوات الظاهرة ما تزال تضعف الثقة أو وضوح المراجعة أو التحويل.',
+  'Customers still see missing trust signals before they reach the request flow.':
+    'العملاء ما يزالون يرون إشارات ثقة مفقودة قبل أن يصلوا إلى مسار الطلب.',
+  'Reply in inbox': 'الرد في صندوق الوارد',
+  'No reviews yet': 'لا توجد تقييمات بعد',
+  'Operational health': 'الصحة التشغيلية',
+  'Use these signals to judge readiness, responsiveness, and visible service quality at a glance.':
+    'استخدم هذه المؤشرات لقياس الجاهزية وسرعة الاستجابة وجودة الخدمة الظاهرة بسرعة.',
+  'Quotes waiting': 'عروض تنتظر قرارًا',
+  'Trust and completeness': 'الثقة والاكتمال',
+  'Public readiness': 'الجاهزية العامة',
+  Completed: 'مكتمل',
+  Missing: 'ناقص',
+  'Growth and visibility': 'النمو والظهور',
+  'Plan capabilities should stay visible but quieter than requests and inbox pressure.':
+    'قدرات الباقة يجب أن تبقى ظاهرة لكن أهدأ من ضغط الطلبات وصندوق الوارد.',
+  'Homepage featuring can be switched on when visibility needs a boost.':
+    'يمكن تفعيل إبراز الصفحة الرئيسية عندما يحتاج الظهور إلى دفعة.',
+  'Featured services increase how often premium offers are seen first.':
+    'الخدمات المميزة تزيد من ظهور العروض الأقوى في المقدمة.',
+  'Auto-reply stays secondary here, but it still affects response speed inside the inbox.':
+    'الرد التلقائي يبقى ثانويًا هنا، لكنه ما يزال يؤثر على سرعة الاستجابة داخل الصندوق.',
+  'Profile badge': 'شارة الملف',
+  'Use the badge carefully as a trust signal, not as visual noise.':
+    'استخدم الشارة بحذر كإشارة ثقة لا كضوضاء بصرية.',
+  Enabled: 'مفعل',
+  Off: 'متوقف',
+  'Not available on current plan': 'غير متاح في الباقة الحالية',
+  'published items': 'عناصر منشورة',
+  'live now': 'مباشرة الآن',
+  'likes + comments': 'إعجابات + تعليقات',
+  'currently visible': 'مرئية الآن',
+  'still private': 'ما تزال خاصة',
+  'boosted offers': 'عروض معززة',
+  'Use recent service inventory as a support signal, not the main dashboard story.':
+    'استخدم قائمة الخدمات الأخيرة كمؤشر داعم لا كقصة الصفحة الرئيسية.',
+  'View all services': 'عرض كل الخدمات',
+  'No services exist yet. Publish the first service to unlock marketplace demand.':
+    'لا توجد خدمات بعد. انشر أول خدمة لفتح الطلب داخل السوق.',
+  'Needs your attention': 'يحتاج انتباهك',
+  'Start with operational pressure or public blockers before quieter growth work.':
+    'ابدأ بالضغط التشغيلي أو العوائق العامة قبل أعمال النمو الهادئة.',
+  'Business identity': 'هوية النشاط',
+  'Avatar image': 'صورة الحساب',
+  'Cover image': 'صورة الغلاف',
+  'Public description': 'الوصف العام',
+  'Location and coverage': 'الموقع والتغطية',
+  'Address line': 'العنوان',
+  'Portfolio proof': 'إثبات المعرض',
+  'Live story': 'قصة مباشرة',
+  Verification: 'التوثيق',
+  Interactions: 'التفاعلات',
+});
+
+Object.assign(TRANSLATIONS.fr, {
+  Back: 'Retour',
+  'Provider control desk': 'Poste de pilotage prestataire',
+  'This page keeps requests, inbox pressure, public readiness, and visibility levers in one operational surface.':
+    'Cette page rassemble les demandes, la pression de la boite de reception, la preparation publique et les leviers de visibilite dans une seule surface operationnelle.',
+  'Next action': 'Action suivante',
+  'Requests waiting for a first response should always come first.':
+    'Les demandes qui attendent une premiere reponse doivent toujours passer en premier.',
+  'Account status still affects public visibility and readiness.':
+    'Le statut du compte affecte encore la visibilite publique et la preparation.',
+  'Unread conversations still hold commercial context that can convert into booked work.':
+    'Les conversations non lues portent encore un contexte commercial qui peut se convertir en travail reserve.',
+  'Public trust gaps still slow conversion before customers even message or request.':
+    'Les manques de confiance publique ralentissent encore la conversion avant meme le message ou la demande.',
+  'Draft services should become published offers or be cleaned out of the workspace.':
+    'Les services brouillon doivent devenir des offres publiees ou etre nettoyes du workspace.',
+  'Proof of work still needs stronger coverage across portfolio and stories.':
+    'La preuve de travail a encore besoin d une couverture plus forte dans le portfolio et les stories.',
+  'The operational workspace is healthy. Stay close to fresh demand and follow-up.':
+    'Le workspace operationnel est sain. Restez proche de la demande recente et du suivi.',
+  'Pending requests': 'Demandes en attente',
+  'Requests waiting for a first response.': 'Demandes en attente d une premiere reponse.',
+  'Unread messages': 'Messages non lus',
+  'Customer threads still unread in the inbox.': 'Fils clients encore non lus dans la boite.',
+  'Account status still needs provider attention.': 'Le statut du compte demande encore l attention du prestataire.',
+  'Public readiness blockers': 'Blocages de preparation publique',
+  'Public profile still has visible trust gaps.': 'Le profil public presente encore des manques visibles de confiance.',
+  'New leads, quoted work, and delivery follow-up.':
+    'Nouveaux leads, devis emis, et suivi de livraison.',
+  'Unread customer threads and reply pressure.': 'Fils clients non lus et pression de reponse.',
+  'Stories, proof of work, likes, comments, and drafts.':
+    'Stories, preuves de travail, likes, commentaires et brouillons.',
+  'Published offers, drafts, and featured service positioning.':
+    'Offres publiees, brouillons, et positionnement des services mis en avant.',
+  'Identity, moderation fields, and public trust basics.':
+    'Identite, champs de moderation, et bases de confiance publique.',
+  Ready: 'Pret',
+  'Almost ready': 'Presque pret',
+  'Needs work': 'Besoin de travail',
+  'The public profile already carries enough trust signal to support conversion.':
+    'Le profil public porte deja assez de signaux de confiance pour soutenir la conversion.',
+  'A few visible gaps still weaken trust, moderation clarity, or conversion.':
+    'Quelques manques visibles affaiblissent encore la confiance, la clarte de moderation, ou la conversion.',
+  'Customers still see missing trust signals before they reach the request flow.':
+    'Les clients voient encore des signaux de confiance manquants avant d entrer dans le flux de demande.',
+  'Reply in inbox': 'Repondre dans la boite',
+  'No reviews yet': 'Aucun avis pour le moment',
+  'Operational health': 'Sante operationnelle',
+  'Use these signals to judge readiness, responsiveness, and visible service quality at a glance.':
+    'Utilisez ces signaux pour juger rapidement la preparation, la reactivite, et la qualite visible du service.',
+  'Quotes waiting': 'Devis en attente',
+  'Trust and completeness': 'Confiance et completude',
+  'Public readiness': 'Preparation publique',
+  Completed: 'Complete',
+  Missing: 'Manquant',
+  'Growth and visibility': 'Croissance et visibilite',
+  'Plan capabilities should stay visible but quieter than requests and inbox pressure.':
+    'Les capacites du plan doivent rester visibles mais plus discretes que la pression des demandes et de la boite.',
+  'Homepage featuring can be switched on when visibility needs a boost.':
+    'La mise en avant sur la page d accueil peut etre activee lorsque la visibilite doit etre renforcee.',
+  'Featured services increase how often premium offers are seen first.':
+    'Les services mis en avant augmentent la frequence d apparition des offres premium.',
+  'Auto-reply stays secondary here, but it still affects response speed inside the inbox.':
+    'La reponse automatique reste secondaire ici, mais elle affecte toujours la vitesse de reponse dans la boite.',
+  'Profile badge': 'Badge profil',
+  'Use the badge carefully as a trust signal, not as visual noise.':
+    'Utilisez le badge avec retenue comme signal de confiance, pas comme bruit visuel.',
+  Enabled: 'Active',
+  Off: 'Desactive',
+  'Not available on current plan': 'Non disponible avec le plan actuel',
+  'published items': 'elements publies',
+  'live now': 'en direct',
+  'likes + comments': 'likes + commentaires',
+  'currently visible': 'visibles maintenant',
+  'still private': 'encore prives',
+  'boosted offers': 'offres boostees',
+  'Use recent service inventory as a support signal, not the main dashboard story.':
+    'Utilisez l inventaire recent des services comme signal de support, pas comme sujet principal du dashboard.',
+  'View all services': 'Voir tous les services',
+  'No services exist yet. Publish the first service to unlock marketplace demand.':
+    'Aucun service pour le moment. Publiez le premier service pour ouvrir la demande marketplace.',
+  'Needs your attention': 'Necessite votre attention',
+  'Start with operational pressure or public blockers before quieter growth work.':
+    'Commencez par la pression operationnelle ou les blocages publics avant le travail de croissance plus calme.',
+  'Business identity': 'Identite commerciale',
+  'Avatar image': 'Image avatar',
+  'Cover image': 'Image de couverture',
+  'Public description': 'Description publique',
+  'Location and coverage': 'Localisation et couverture',
+  'Address line': 'Adresse',
+  'Portfolio proof': 'Preuve portfolio',
+  'Live story': 'Story active',
+  Verification: 'Verification',
+  Interactions: 'Interactions',
 });
 
 const normalizeTranslationKey = (value: string) => value.replace(/\s+/g, ' ').trim();

@@ -1,18 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight,
+  ArrowUpDown,
   BadgeCheck,
-  Clock3,
-  Filter,
+  Grid3X3,
+  List,
   MapPin,
-  MessageCircle,
+  MessageSquare,
   Search,
-  Sparkles,
+  SlidersHorizontal,
   Star,
+  X,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../config/api';
-import PublicMarketplaceLayout from '../components/PublicMarketplaceLayout';
+import CustomerWorkspaceTopNav from '../components/customer/CustomerWorkspaceTopNav';
+import PublicExploreChrome from '../components/public-entry/PublicExploreChrome';
 import {
   getBranchSubcategories,
   getCategoryLookup,
@@ -22,13 +24,8 @@ import {
   normalizeCategoryValue,
   resolveCategoryId as resolveMarketplaceCategoryId,
 } from '../lib/categories';
-import {
-  ALGERIA_WILAYAS,
-  buildGoogleMapsSearchUrl,
-  MARKET_REGIONS,
-} from '../lib/algeria';
+import { ALGERIA_WILAYAS, MARKET_REGIONS } from '../lib/algeria';
 import { useI18n } from '../i18n';
-import '../styles/app-primitives.css';
 import { getStoredUser } from '../lib/role-routing';
 
 type ProviderResult = {
@@ -127,6 +124,12 @@ const CustomerExplore: React.FC = () => {
   const [providers, setProviders] = useState<ProviderResult[]>([]);
   const [loadingResults, setLoadingResults] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [featuredOnly, setFeaturedOnly] = useState(false);
+  const [minimumRating, setMinimumRating] = useState('');
+
   const rootCategories = useMemo(() => getRootCategories(categories), [categories]);
   const categoryLookup = useMemo(() => getCategoryLookup(categories), [categories]);
   const activeCategoryId = useMemo(
@@ -240,25 +243,25 @@ const CustomerExplore: React.FC = () => {
       const leftWilayaBoost =
         activeFilters.wilaya &&
         normalizeCategoryValue(left.wilaya || '') ===
-        normalizeCategoryValue(activeFilters.wilaya)
+          normalizeCategoryValue(activeFilters.wilaya)
           ? 1
           : 0;
       const rightWilayaBoost =
         activeFilters.wilaya &&
         normalizeCategoryValue(right.wilaya || '') ===
-        normalizeCategoryValue(activeFilters.wilaya)
+          normalizeCategoryValue(activeFilters.wilaya)
           ? 1
           : 0;
       const leftRegionBoost =
         activeFilters.region &&
         normalizeCategoryValue(left.region || '') ===
-        normalizeCategoryValue(activeFilters.region)
+          normalizeCategoryValue(activeFilters.region)
           ? 1
           : 0;
       const rightRegionBoost =
         activeFilters.region &&
         normalizeCategoryValue(right.region || '') ===
-        normalizeCategoryValue(activeFilters.region)
+          normalizeCategoryValue(activeFilters.region)
           ? 1
           : 0;
 
@@ -296,21 +299,28 @@ const CustomerExplore: React.FC = () => {
     });
   }, [activeFilters.region, activeFilters.sort, activeFilters.wilaya, providers]);
 
-  const selectedCategoryName = useMemo(() => {
-    return categoryLookup.get(activeCategoryId)?.name || '';
-  }, [activeCategoryId, categoryLookup]);
-
-  const activeLocationLabel = [activeFilters.city, activeFilters.wilaya, activeFilters.region]
-    .filter(Boolean)
-    .join(', ');
+  const filteredProviders = useMemo(
+    () =>
+      rankedProviders.filter((provider) => {
+        const providerRating = Number(provider.averageRating || 0);
+        if (verifiedOnly && !provider.isVerified) return false;
+        if (featuredOnly && !provider.featuredOnHomepage) return false;
+        if (minimumRating && providerRating < Number(minimumRating)) return false;
+        return true;
+      }),
+    [featuredOnly, minimumRating, rankedProviders, verifiedOnly]
+  );
 
   const executeSearch = (filters: ExploreFilters) => {
     setSearchParams(buildSearchParams(filters));
   };
 
-  const resetFilters = () => {
+  const resetAll = () => {
     setDraftFilters(defaultFilters);
     setSearchParams(new URLSearchParams());
+    setVerifiedOnly(false);
+    setFeaturedOnly(false);
+    setMinimumRating('');
   };
 
   const openIntentFlow = (providerId: string, intent: 'message' | 'request') => {
@@ -329,466 +339,656 @@ const CustomerExplore: React.FC = () => {
     navigate(`/providers/${providerId}`);
   };
 
-  const pageContent = (
-    <div className={isStandalone ? 'grid gap-8 pt-8' : 'psp-page-stack'}>
-      <section className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-        <div className="rounded-[30px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_50px_rgba(15,23,42,0.08)]">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700">
-            <Sparkles size={14} />
-            {t('Local-first Algerian discovery')}
-          </div>
-          <h1 className="mt-4 text-[32px] font-black tracking-tight text-slate-900 md:text-[44px]">
-            {t('Search providers with local precision')}
-          </h1>
-          <p className="mt-4 max-w-[640px] text-[16px] leading-8 text-slate-500">
-            {t(
-              'Discovery is now structured around Algeria-specific geography. Search by service need, city, region, wilaya, and category without losing deep-linking or ranking quality.'
-            )}
-          </p>
+  const activeFilterChips = [
+    activeFilters.query ? { key: 'query', label: activeFilters.query, clear: () => executeSearch({ ...activeFilters, query: '' }) } : null,
+    activeFilters.city ? { key: 'city', label: activeFilters.city, clear: () => executeSearch({ ...activeFilters, city: '' }) } : null,
+    activeFilters.region ? { key: 'region', label: activeFilters.region, clear: () => executeSearch({ ...activeFilters, region: '' }) } : null,
+    activeFilters.wilaya ? { key: 'wilaya', label: activeFilters.wilaya, clear: () => executeSearch({ ...activeFilters, wilaya: '' }) } : null,
+    activeCategoryId
+      ? {
+          key: 'category',
+          label: categoryLookup.get(activeCategoryId)?.name || activeFilters.category,
+          clear: () => executeSearch({ ...activeFilters, category: '' }),
+        }
+      : null,
+    verifiedOnly ? { key: 'verified', label: t('Verified only'), clear: () => setVerifiedOnly(false) } : null,
+    featuredOnly ? { key: 'featured', label: t('Featured'), clear: () => setFeaturedOnly(false) } : null,
+    minimumRating
+      ? {
+          key: 'rating',
+          label: `${minimumRating}+ ${t('Stars')}`,
+          clear: () => setMinimumRating(''),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; clear: () => void }>;
 
-          <div className="mt-6 grid gap-3 md:grid-cols-[1.2fr_0.9fr_0.85fr_auto]">
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <Search size={18} className="text-slate-400" />
+  const renderProviderCard = (provider: ProviderResult) => {
+    const headline = provider.primaryCategory?.name
+      ? `${provider.primaryCategory.name}${provider.yearsOfExperience ? ` • ${provider.yearsOfExperience} ${t('years')}` : ''}`
+      : t('Professional services');
+    const locationLabel =
+      [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') || t('Algeria');
+    const displayPrice =
+      provider.servicesPreview?.find((service) => service.price)?.price || null;
+    const cardImage =
+      provider.avatarUrl ||
+      provider.coverUrl ||
+      'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=300&q=80';
+
+    if (viewMode === 'grid') {
+      return (
+        <article
+          key={provider.id}
+          className="group overflow-hidden rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-blue-200 hover:shadow-md"
+        >
+          <div className="relative mb-4 h-44 overflow-hidden rounded-lg">
+            <img src={cardImage} alt={provider.companyName} className="h-full w-full object-cover" />
+            {provider.isVerified ? (
+              <div className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-500">
+                <BadgeCheck className="h-4 w-4 text-white" />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-semibold text-slate-900">
+                  {provider.companyName}
+                </h3>
+                <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{headline}</p>
+              </div>
+              {displayPrice ? (
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] text-slate-400">{t('From')}</p>
+                  <p className="text-sm font-semibold text-slate-900">{displayPrice}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <div className="flex items-center gap-1">
+                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                <span className="font-medium text-slate-900">
+                  {Number(provider.averageRating || 0).toFixed(1)}
+                </span>
+                <span className="text-slate-500">({Number(provider.reviewsCount || 0)})</span>
+              </div>
+              <div className="flex items-center gap-1 text-slate-500">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{locationLabel}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {provider.profileBadgeText ? (
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                  {provider.profileBadgeText}
+                </span>
+              ) : null}
+              {provider.serviceCoverage?.label ? (
+                <span className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600">
+                  {provider.serviceCoverage.label}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Link
+                to={`/providers/${provider.id}`}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                {t('View profile')}
+              </Link>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-blue-200 hover:text-slate-900"
+                onClick={() => openIntentFlow(provider.id, 'message')}
+              >
+                <MessageSquare className="mr-1.5 h-4 w-4" />
+                {t('Message')}
+              </button>
+            </div>
+          </div>
+        </article>
+      );
+    }
+
+    return (
+      <article
+        key={provider.id}
+        className="group flex gap-4 rounded-lg border border-slate-200 bg-white p-4 transition-all hover:border-blue-200 hover:shadow-md"
+      >
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg">
+          <img src={cardImage} alt={provider.companyName} className="h-full w-full object-cover" />
+          {provider.isVerified ? (
+            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-blue-500">
+              <BadgeCheck className="h-3.5 w-3.5 text-white" />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate font-semibold text-slate-900">{provider.companyName}</h3>
+              <p className="mt-0.5 truncate text-sm text-slate-500">{headline}</p>
+            </div>
+            {displayPrice ? (
+              <div className="shrink-0 text-right">
+                <p className="text-xs text-slate-400">{t('From')}</p>
+                <p className="font-semibold text-slate-900">{displayPrice}</p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <div className="flex items-center gap-1">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+              <span className="font-medium text-slate-900">
+                {Number(provider.averageRating || 0).toFixed(1)}
+              </span>
+              <span className="text-slate-500">({Number(provider.reviewsCount || 0)})</span>
+            </div>
+
+            <div className="flex items-center gap-1 text-slate-500">
+              <MapPin className="h-3.5 w-3.5" />
+              <span>{locationLabel}</span>
+            </div>
+
+            {provider.responseTimeMinutes ? (
+              <span className="hidden text-slate-500 sm:inline">
+                {t('Reply in')} {provider.responseTimeMinutes} {t('min')}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {provider.profileBadgeText ? (
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                {provider.profileBadgeText}
+              </span>
+            ) : null}
+            {(provider.servicesPreview?.length
+              ? provider.servicesPreview.slice(0, 2).map((service) => service.name)
+              : [provider.primaryCategory?.name || t('Services')]).map((item) => (
+              <span
+                key={`${provider.id}-${item}`}
+                className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link
+              to={`/providers/${provider.id}`}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              {t('View profile')}
+            </Link>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-blue-200 hover:text-slate-900"
+              onClick={() => openIntentFlow(provider.id, 'message')}
+            >
+              <MessageSquare className="mr-1.5 h-4 w-4" />
+              {t('Message')}
+            </button>
+            <button
+              type="button"
+              className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+              onClick={() => openIntentFlow(provider.id, 'request')}
+            >
+              {t('Request service')}
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  const content = (
+    <div className="min-h-screen bg-white">
+      {!isStandalone ? <CustomerWorkspaceTopNav currentPage="explore" variant="v0" /> : null}
+
+      <div className="border-b border-slate-200 bg-white/70">
+        <div className="psp-desktop-frame py-6">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              executeSearch(draftFilters);
+            }}
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
+          >
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
+                type="search"
+                placeholder={t('What service do you need?')}
                 value={draftFilters.query}
                 onChange={(event) =>
                   setDraftFilters((current) => ({ ...current, query: event.target.value }))
                 }
-                placeholder={t('Search by service, skill, or category')}
-                className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
-            </label>
+            </div>
 
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <MapPin size={18} className="text-slate-400" />
+            <div className="relative sm:w-52">
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={draftFilters.city}
                 onChange={(event) =>
                   setDraftFilters((current) => ({ ...current, city: event.target.value }))
                 }
-                placeholder={t('City / Commune / Locality')}
-                className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                placeholder={t('All locations')}
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
-            </label>
-
-            <select
-              value={draftRootCategoryId}
-              onChange={(event) =>
-                setDraftFilters((current) => ({ ...current, category: event.target.value }))
-              }
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
-            >
-              <option value="">{t('All categories')}</option>
-              {rootCategories.map((category) => (
-                <option key={category.id} value={category.slug || category.id}>
-                  {t(category.name)}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={() => executeSearch(draftFilters)}
-              className="psp-button psp-button--primary"
-            >
-              {t('Search')}
-            </button>
-          </div>
-
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <select
-              value={draftFilters.region}
-              onChange={(event) =>
-                setDraftFilters((current) => ({ ...current, region: event.target.value }))
-              }
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
-            >
-              <option value="">{t('All marketplace regions')}</option>
-              {MARKET_REGIONS.map((region) => (
-                <option key={region} value={region}>
-                  {t(region)}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={draftFilters.wilaya}
-              onChange={(event) =>
-                setDraftFilters((current) => ({ ...current, wilaya: event.target.value }))
-              }
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
-            >
-              <option value="">{t('All wilayas')}</option>
-              {ALGERIA_WILAYAS.map((wilaya) => (
-                <option key={wilaya} value={wilaya}>
-                  {t(wilaya)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="psp-surface">
-          <div className="psp-surface__header">
-          <div>
-              <h2>{t('Active search')}</h2>
-              <div className="psp-surface__sub">
-                {t(
-                  'The current URL already preserves filters and ranking. Adjust, search, and share the same state without losing context.'
-                )}
-              </div>
             </div>
-            <button
-              type="button"
-              className="psp-button psp-button--secondary"
-              onClick={resetFilters}
-            >
-              {t('Reset')}
-            </button>
-          </div>
 
-          <div className="psp-detail-grid">
-            <div className="psp-detail-item">
-              <div className="psp-detail-item__label">{t('Query')}</div>
-              <div className="psp-detail-item__value">
-                {activeFilters.query || t('Any service need')}
-              </div>
+            <div className="sm:w-56">
+              <select
+                value={draftRootCategoryId}
+                onChange={(event) =>
+                  setDraftFilters((current) => ({ ...current, category: event.target.value }))
+                }
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">{t('All categories')}</option>
+                {rootCategories.map((category) => (
+                  <option key={category.id} value={category.slug || category.id}>
+                    {t(category.name)}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="psp-detail-item">
-              <div className="psp-detail-item__label">{t('Local focus')}</div>
-              <div className="psp-detail-item__value">
-                {activeLocationLabel || t('All Algeria')}
-              </div>
-            </div>
-            <div className="psp-detail-item">
-              <div className="psp-detail-item__label">{t('Category')}</div>
-              <div className="psp-detail-item__value">
-                {selectedCategoryName || t('All categories')}
-              </div>
-            </div>
-            <div className="psp-detail-item">
-              <div className="psp-detail-item__label">{t('Ranking')}</div>
-              <div className="psp-detail-item__value capitalize">{activeFilters.sort}</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="psp-surface">
-        <div className="psp-surface__header">
-          <div>
-            <h2>{t('Filters and ranking')}</h2>
-            <div className="psp-surface__sub">
-              {t(
-                'Narrow the visible provider set first, then switch ranking once the shortlist is close to the right scope.'
-              )}
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">
-            <Filter size={14} />
-            {rankedProviders.length} {t(rankedProviders.length === 1 ? 'provider' : 'providers')}
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
-          <div>
-            <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Categories')}
-            </div>
-            <div className="psp-chip-row">
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-6 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                {t('Search')}
+              </button>
               <button
                 type="button"
-                className={`psp-chip ${!activeCategoryId ? 'psp-chip--active' : ''}`}
-                onClick={() => executeSearch({ ...activeFilters, category: '' })}
+                className={`inline-flex h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium transition-colors ${
+                  filtersOpen
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-slate-900'
+                }`}
+                onClick={() => setFiltersOpen((current) => !current)}
               >
-                {t('All categories')}
+                <SlidersHorizontal className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">{t('Filters')}</span>
               </button>
-              {rootCategories.map((category) => {
-                const isActive = selectedRootCategoryId === category.id;
+            </div>
+          </form>
+        </div>
+      </div>
 
-                return (
+      <div className="psp-desktop-frame py-6">
+        <div className="flex gap-6">
+          <aside
+            className={`hidden shrink-0 lg:block lg:w-72 ${
+              filtersOpen ? '' : 'lg:hidden'
+            }`}
+          >
+            <div className="sticky top-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-slate-900">{t('Filters')}</h3>
+                <button
+                  type="button"
+                  onClick={resetAll}
+                  className="text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
+                >
+                  {t('Reset')}
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-5">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-slate-900">{t('Categories')}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {rootCategories.map((category) => {
+                      const active = selectedRootCategoryId === category.id;
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                            active
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 text-slate-600 hover:border-blue-200 hover:text-slate-900'
+                          }`}
+                          onClick={() =>
+                            executeSearch({
+                              ...activeFilters,
+                              category: category.slug || category.id,
+                            })
+                          }
+                        >
+                          {t(category.name)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {selectedRootCategoryId && branchSubcategories.length ? (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-slate-900">{t('Subcategories')}</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {branchSubcategories.map((category) => {
+                        const active = activeCategoryId === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                              active
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 text-slate-600 hover:border-blue-200 hover:text-slate-900'
+                            }`}
+                            onClick={() =>
+                              executeSearch({
+                                ...activeFilters,
+                                category: category.slug || category.id,
+                              })
+                            }
+                          >
+                            {t(category.label)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-slate-900">{t('Location')}</h4>
+                  <select
+                    value={draftFilters.region}
+                    onChange={(event) =>
+                      setDraftFilters((current) => ({ ...current, region: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">{t('All marketplace regions')}</option>
+                    {MARKET_REGIONS.map((region) => (
+                      <option key={region} value={region}>
+                        {t(region)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={draftFilters.wilaya}
+                    onChange={(event) =>
+                      setDraftFilters((current) => ({ ...current, wilaya: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">{t('All wilayas')}</option>
+                    {ALGERIA_WILAYAS.map((wilaya) => (
+                      <option key={wilaya} value={wilaya}>
+                        {t(wilaya)}
+                      </option>
+                    ))}
+                  </select>
                   <button
-                    key={category.id}
                     type="button"
-                    className={`psp-chip ${isActive ? 'psp-chip--active' : ''}`}
-                    onClick={() =>
+                    className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    onClick={() => executeSearch(draftFilters)}
+                  >
+                    {t('Apply Filters')}
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-slate-900">{t('Trust Signals')}</h4>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={verifiedOnly}
+                      onChange={(event) => setVerifiedOnly(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-200"
+                    />
+                    {t('Verified only')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={featuredOnly}
+                      onChange={(event) => setFeaturedOnly(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-200"
+                    />
+                    {t('Featured')}
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-slate-900">{t('Minimum Rating')}</h4>
+                  {['4.5', '4.0', '3.5'].map((rating) => (
+                    <label key={rating} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="radio"
+                        name="minimumRating"
+                        value={rating}
+                        checked={minimumRating === rating}
+                        onChange={(event) => setMinimumRating(event.target.value)}
+                        className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-200"
+                      />
+                      {rating}+ {t('Stars')}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {filtersOpen ? (
+            <div className="fixed inset-0 z-50 lg:hidden">
+              <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => setFiltersOpen(false)}
+              />
+              <div className="absolute right-0 top-0 h-full w-80 max-w-full overflow-y-auto bg-white p-4">
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-slate-900">{t('Filters')}</h3>
+                    <button
+                      type="button"
+                      onClick={() => setFiltersOpen(false)}
+                      className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <button
+                      type="button"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700"
+                      onClick={() => {
+                        resetAll();
+                        setFiltersOpen(false);
+                      }}
+                    >
+                      {t('Reset')}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white"
+                      onClick={() => {
+                        executeSearch(draftFilters);
+                        setFiltersOpen(false);
+                      }}
+                    >
+                      {t('Apply Filters')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-lg font-semibold text-slate-900">
+                  {filteredProviders.length} {t(filteredProviders.length === 1 ? 'provider' : 'providers')} {t('found')}
+                </h1>
+                <p className="text-sm text-slate-500">{t('Showing results for your search')}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={activeFilters.sort}
+                    onChange={(event) =>
                       executeSearch({
                         ...activeFilters,
-                        category: category.slug || category.id,
+                        sort: event.target.value as ExploreFilters['sort'],
                       })
                     }
+                    className="h-9 rounded-md border border-slate-200 bg-white pl-8 pr-8 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   >
-                    {t(category.name)}
+                    <option value="featured">{t('Most Relevant')}</option>
+                    <option value="verified">{t('Verified first')}</option>
+                    <option value="rating">{t('Highest rated')}</option>
+                  </select>
+                </div>
+
+                <div className="hidden items-center rounded-md border border-slate-200 sm:flex">
+                  <button
+                    type="button"
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-r-none ${
+                      viewMode === 'list' ? 'bg-slate-100 text-slate-900' : 'text-slate-500'
+                    }`}
+                    onClick={() => setViewMode('list')}
+                  >
+                    <List className="h-4 w-4" />
                   </button>
-                );
-              })}
+                  <button
+                    type="button"
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-l-none ${
+                      viewMode === 'grid' ? 'bg-slate-100 text-slate-900' : 'text-slate-500'
+                    }`}
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {selectedRootCategoryId && branchSubcategories.length ? (
-              <>
-                <div className="mb-3 mt-5 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  {t('Subcategories')}
-                </div>
-                <div className="psp-chip-row">
-                  <button
-                    type="button"
-                    className={`psp-chip ${
-                      activeCategoryId === selectedRootCategoryId ? 'psp-chip--active' : ''
-                    }`}
-                    onClick={() =>
-                      executeSearch({
-                        ...activeFilters,
-                        category: selectedRootCategoryId,
-                      })
-                    }
+            {activeFilterChips.length > 0 ? (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500">{t('Active filters:')}</span>
+                {activeFilterChips.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
                   >
-                    {t('All in this main category')}
-                  </button>
-                  {branchSubcategories.map((category) => {
-                    const isActive = activeCategoryId === category.id;
+                    {chip.label}
+                    <button type="button" onClick={chip.clear} className="rounded-full p-0.5 hover:bg-slate-200">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={resetAll}
+                  className="inline-flex h-7 items-center justify-center rounded-md px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
+                >
+                  {t('Clear all')}
+                </button>
+              </div>
+            ) : null}
 
-                    return (
+            {loadingResults ? (
+              <div
+                className={
+                  viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2' : 'space-y-4'
+                }
+              >
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div
+                    key={`explore-skeleton-${index}`}
+                    className="h-36 animate-pulse rounded-lg bg-slate-100"
+                  />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                <div className="font-semibold">{t('Discovery search failed.')}</div>
+                <div className="mt-1">{error}</div>
+                <button
+                  type="button"
+                  className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  onClick={() => executeSearch(activeFilters)}
+                >
+                  {t('Retry search')}
+                </button>
+              </div>
+            ) : filteredProviders.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+                <div className="font-semibold text-slate-700">
+                  {t('No providers matched the current filters.')}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {t('Try removing the local filters or search with broader service terms.')}
+                </div>
+                <button
+                  type="button"
+                  className="mt-4 inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-blue-200 hover:text-slate-900"
+                  onClick={resetAll}
+                >
+                  {t('Clear filters')}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2' : 'space-y-4'}>
+                  {filteredProviders.map((provider) => renderProviderCard(provider))}
+                </div>
+
+                <div className="mt-12 border-t border-slate-200 pt-8">
+                  <h2 className="mb-3 text-sm font-medium text-slate-900">
+                    {t('Browse by category')}
+                  </h2>
+                  <div className="flex flex-wrap gap-2">
+                    {rootCategories.map((category) => (
                       <button
                         key={category.id}
                         type="button"
-                        className={`psp-chip ${isActive ? 'psp-chip--active' : ''}`}
                         onClick={() =>
                           executeSearch({
                             ...activeFilters,
                             category: category.slug || category.id,
                           })
                         }
+                        className="text-sm text-slate-500 transition-colors hover:text-slate-900"
                       >
-                        {t(category.label)}
+                        {t(category.name)}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               </>
-            ) : null}
-          </div>
-
-          <div>
-            <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Sort by')}
-            </div>
-            <div className="psp-chip-row">
-              {[
-                { key: 'featured', label: t('Featured first') },
-                { key: 'verified', label: t('Verified first') },
-                { key: 'rating', label: t('Highest rated') },
-              ].map((sortOption) => (
-                <button
-                  key={sortOption.key}
-                  type="button"
-                  className={`psp-chip ${
-                    activeFilters.sort === sortOption.key ? 'psp-chip--active' : ''
-                  }`}
-                  onClick={() =>
-                    executeSearch({
-                      ...activeFilters,
-                      sort: sortOption.key as ExploreFilters['sort'],
-                    })
-                  }
-                >
-                  {sortOption.label}
-                </button>
-              ))}
-            </div>
+            )}
           </div>
         </div>
-      </section>
-
-      <section className="psp-page-stack">
-        {loadingResults ? (
-          <div className="psp-card-grid">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={`explore-skeleton-${index}`}
-                className="h-[320px] animate-pulse rounded-[28px] bg-white/80 shadow-[0_20px_45px_rgba(15,23,42,0.06)]"
-              />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="psp-error-state">
-            <div className="font-bold">{t('Discovery search failed.')}</div>
-            <div>{error}</div>
-            <button
-              type="button"
-              className="psp-button psp-button--primary mt-4"
-              onClick={() => executeSearch(activeFilters)}
-            >
-              {t('Retry search')}
-            </button>
-          </div>
-        ) : rankedProviders.length === 0 ? (
-          <div className="psp-empty-state">
-            <div className="font-bold text-slate-700">
-              {t('No providers matched the current filters.')}
-            </div>
-            <div>
-              {t('Try removing the local filters or search with broader service terms.')}
-            </div>
-            <button
-              type="button"
-              className="psp-button psp-button--secondary mt-4"
-              onClick={resetFilters}
-            >
-              {t('Clear filters')}
-            </button>
-          </div>
-        ) : (
-          <div className="psp-card-grid">
-            {rankedProviders.map((provider) => (
-              <article key={provider.id} className="overflow-hidden rounded-[28px] border border-white/80 bg-white/90 shadow-[0_24px_45px_rgba(15,23,42,0.08)]">
-                <div className="relative h-[210px]">
-                  <img
-                    src={
-                      provider.coverUrl ||
-                      provider.avatarUrl ||
-                      'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=900&q=80'
-                    }
-                    alt={provider.companyName}
-                    className="h-full w-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.06),rgba(15,23,42,0.64))]" />
-                  <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                    {provider.featuredOnHomepage ? (
-                      <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white">
-                        {t('Featured')}
-                      </span>
-                    ) : null}
-                    {provider.profileBadgeText ? (
-                      <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
-                        {provider.profileBadgeText}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-
-                  <div className="grid gap-4 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-[24px] font-black tracking-tight text-slate-900">
-                        {provider.companyName}
-                      </h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                        <span className="inline-flex items-center gap-2">
-                          <MapPin size={14} />
-                          {[provider.city, provider.wilaya, provider.region]
-                            .filter(Boolean)
-                            .join(', ') || t('Algeria')}
-                        </span>
-                        {provider.serviceCoverage?.label ? (
-                          <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                            {provider.serviceCoverage.label}
-                          </span>
-                        ) : null}
-                        {provider.isVerified ? (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">
-                            <BadgeCheck size={14} />
-                            {t('Verified')}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-                      <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                        {t('Rating')}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-lg font-black text-slate-900">
-                        <Star size={16} fill="currentColor" className="text-amber-400" />
-                        {Number(provider.averageRating || 0).toFixed(1)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="psp-summary-strip">
-                    <span className="psp-summary-chip">
-                      <strong>{provider.primaryCategory?.name || t('General services')}</strong>
-                      {t('category')}
-                    </span>
-                    <span className="psp-summary-chip">
-                      <strong>{Number(provider.reviewsCount || 0)}</strong>
-                      {t('reviews')}
-                    </span>
-                    <span className="psp-summary-chip">
-                      <Clock3 size={14} />
-                      <strong>
-                        {provider.responseTimeMinutes || 0} {t('min')}
-                      </strong>
-                      {t('first reply')}
-                    </span>
-                    <span className="psp-summary-chip">
-                      <strong>{provider.serviceCoverage?.label || t('Declared on profile')}</strong>
-                      {t('reach')}
-                    </span>
-                    <span className="psp-summary-chip">
-                      <strong>{provider.yearsOfExperience || 0} {t('years')}</strong>
-                      {t('experience')}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                      Service preview
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(provider.servicesPreview?.length
-                        ? provider.servicesPreview
-                        : [{ id: `${provider.id}-fallback`, name: t('Open provider profile for services') }]
-                      ).map((service) => (
-                        <span key={service.id} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">
-                          {service.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    <Link to={`/providers/${provider.id}`} className="psp-button psp-button--primary">
-                      {t('View profile')}
-                      <ArrowRight size={16} />
-                    </Link>
-                    <button
-                      type="button"
-                      className="psp-button psp-button--secondary"
-                      onClick={() => openIntentFlow(provider.id, 'message')}
-                    >
-                      <MessageCircle size={16} />
-                      {t('Message')}
-                    </button>
-                    <button
-                      type="button"
-                      className="psp-button psp-button--secondary"
-                      onClick={() => openIntentFlow(provider.id, 'request')}
-                    >
-                      {t('Request service')}
-                    </button>
-                    <a
-                      href={buildGoogleMapsSearchUrl(
-                        `${provider.companyName} ${provider.city || ''} ${provider.wilaya || ''} Algeria`
-                      )}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="psp-control-pill"
-                    >
-                      {t('Open map')}
-                    </a>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      </div>
     </div>
   );
 
   if (isStandalone) {
-    return <PublicMarketplaceLayout activeNav="explore">{pageContent}</PublicMarketplaceLayout>;
+    return <PublicExploreChrome>{content}</PublicExploreChrome>;
   }
 
-  return pageContent;
+  return content;
 };
 
 export default CustomerExplore;

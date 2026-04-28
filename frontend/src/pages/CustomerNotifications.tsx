@@ -1,8 +1,8 @@
 import React from 'react';
-import NotificationsCenter from '../components/notifications/NotificationsCenter';
+import CustomerNotificationsWorkspace from '../components/customer/CustomerNotificationsWorkspace';
 
 export const CustomerNotifications: React.FC = () => {
-  return <NotificationsCenter mode="customer" />;
+  return <CustomerNotificationsWorkspace />;
 };
 
 export default CustomerNotifications;

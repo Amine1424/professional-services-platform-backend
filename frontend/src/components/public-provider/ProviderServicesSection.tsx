@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Clock3, Sparkles, Tag } from 'lucide-react';
+import React from 'react';
+import { Send, Sparkles } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { PublicProviderPayload } from './types';
 
@@ -9,147 +9,93 @@ interface ProviderServicesSectionProps {
   onExploreCategory: (categorySlug: string) => void;
 }
 
+const formatPrice = (price?: string | null, currency = 'DZD') => {
+  if (!price) {
+    return null;
+  }
+
+  return `${price} ${currency}`;
+};
+
 const ProviderServicesSection: React.FC<ProviderServicesSectionProps> = ({
   services,
   onRequest,
   onExploreCategory,
 }) => {
   const { t } = useI18n();
-  const spotlightService = useMemo(() => {
-    return services.find((service) => service.isFeatured) || services[0] || null;
-  }, [services]);
-
-  const remainingServices = useMemo(() => {
-    if (!spotlightService) return services;
-    return services.filter((service) => service.id !== spotlightService.id);
-  }, [services, spotlightService]);
 
   return (
-    <section id="provider-services" className="psp-surface">
-      <div className="psp-surface__header">
+    <section id="provider-services" className="border-t border-slate-200 py-10">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2>{t('Published services')}</h2>
-          <div className="psp-surface__sub">
-            {t(
-              'These offers can be requested directly from the profile and are structured for quick customer comparison.'
-            )}
-          </div>
+          <h2 className="text-xl font-semibold text-slate-950">{t('Services')}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {services.length} {t('services offered')}
+          </p>
         </div>
       </div>
 
       {!services.length ? (
-        <div className="psp-empty-state">
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
           {t('No published services are visible on this profile yet.')}
         </div>
       ) : (
-        <div className="grid gap-5">
-          {spotlightService ? (
-            <div className="rounded-[28px] border border-white/80 bg-[linear-gradient(135deg,#eff6ff,#ffffff)] p-6 shadow-[0_20px_40px_rgba(15,23,42,0.05)]">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {t('Spotlight service')}
-                  </div>
-                  <div className="mt-3 text-[30px] font-black tracking-tight text-slate-900">
-                    {spotlightService.name}
-                  </div>
-                  <div className="mt-3 max-w-[720px] text-sm leading-8 text-slate-600">
-                    {spotlightService.description}
-                  </div>
-                </div>
+        <div className="grid gap-3">
+          {services.map((service) => {
+            const priceLabel = formatPrice(service.price, service.currencyCode);
 
-                <div className="rounded-[22px] bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {t('Starting point')}
+            return (
+              <article
+                key={service.id}
+                className="group rounded-2xl border border-slate-200 bg-white p-5 transition-colors hover:border-blue-200"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <h3 className="font-medium text-slate-950">{service.name}</h3>
+                      {service.isFeatured ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          <Sparkles size={12} />
+                          {t('Popular')}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="line-clamp-2 text-sm text-slate-500">{service.description}</p>
                   </div>
-                  <div className="mt-2 text-[24px] font-black text-slate-900">
-                    {spotlightService.price
-                      ? `${spotlightService.price} ${spotlightService.currencyCode}`
-                      : t('Price on request')}
+
+                  <div className="flex items-center gap-4 sm:shrink-0">
+                    <div className="text-right">
+                      <div className="font-medium text-slate-950">
+                        {priceLabel || t('Price on request')}
+                      </div>
+                      <div className="text-xs text-slate-500">{service.deliveryMode}</div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {service.category?.slug ? (
+                        <button
+                          type="button"
+                          onClick={() => onExploreCategory(service.category!.slug)}
+                          className="hidden h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-slate-500 transition hover:text-slate-900 lg:inline-flex"
+                        >
+                          {t('Similar')}
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => onRequest(service.id, service.name)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition sm:opacity-0 sm:group-hover:opacity-100 hover:border-blue-200 hover:text-slate-900"
+                      >
+                        <Send size={14} />
+                        {t('Request')}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  {spotlightService.category?.name || t('No category')}
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  {spotlightService.deliveryMode}
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600">
-                  {t('Reply in')} {spotlightService.responseTimeHours}h
-                </span>
-                {spotlightService.showPromoBadge && spotlightService.promoBadgeText ? (
-                  <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
-                    {spotlightService.promoBadgeText}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {remainingServices.length ? (
-            <div className="psp-card-grid">
-              {remainingServices.map((service) => (
-              <article key={service.id} className="psp-card">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="psp-card__title">{service.name}</h3>
-                  {service.isFeatured ? (
-                    <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                      {t('Featured')}
-                    </span>
-                  ) : null}
-                  {service.showPromoBadge && service.promoBadgeText ? (
-                    <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
-                      {service.promoBadgeText}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="psp-card__meta">
-                  {service.category?.name || t('No category')} | {service.deliveryMode}
-                </div>
-                <div className="psp-card__description">{service.description}</div>
-
-                <div className="mt-4 grid gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                      <Tag size={12} />
-                      {service.price
-                        ? `${service.price} ${service.currencyCode}`
-                        : t('Price on request')}
-                    </span>
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                      <Clock3 size={12} />
-                      {t('Reply in')} {service.responseTimeHours}h
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="psp-button psp-button--primary"
-                    onClick={() => onRequest(service.id, service.name)}
-                  >
-                    {t('Request this service')}
-                  </button>
-                  {service.category?.slug ? (
-                    <button
-                      type="button"
-                      className="psp-control-pill"
-                      onClick={() => onExploreCategory(service.category!.slug)}
-                    >
-                      <Sparkles size={16} />
-                      {t('Similar providers')}
-                    </button>
-                  ) : null}
                 </div>
               </article>
-              ))}
-            </div>
-          ) : null}
+            );
+          })}
         </div>
       )}
     </section>

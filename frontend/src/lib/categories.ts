@@ -4,6 +4,7 @@ export interface MarketplaceCategory {
   slug?: string;
   description?: string | null;
   iconUrl?: string | null;
+  providerCount?: number;
   parentId?: string | null;
   children?: MarketplaceCategory[];
   depth?: number;

@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../i18n';
 import '../styles/app-shell.css';
 
-type RoleShellLayout = 'default' | 'immersive';
+type RoleShellLayout = 'default' | 'immersive' | 'standalone' | 'fullbleed';
 
 interface RoleShellProps {
   role: AppRole;
@@ -181,6 +181,8 @@ export const RoleShell: React.FC<RoleShellProps> = ({
   const theme = roleThemes[role];
   const roleClassName = role.replace('_', '-');
   const isImmersive = layout === 'immersive';
+  const isStandalone = layout === 'standalone';
+  const isFullbleed = layout === 'fullbleed';
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -216,87 +218,95 @@ export const RoleShell: React.FC<RoleShellProps> = ({
   };
 
   return (
-    <div className={`psp-app-shell psp-app-shell--${roleClassName}`}>
+    <div
+      className={`psp-app-shell psp-app-shell--${roleClassName} ${
+        isStandalone ? 'psp-app-shell--standalone' : ''
+      } ${
+        isFullbleed ? 'psp-app-shell--fullbleed' : ''
+      }`}
+    >
       <div className="psp-app-shell__layout">
-        <aside className="psp-app-shell__sidebar">
-          <div className="psp-app-shell__brand">
-            <div className="psp-app-shell__brand-mark">PS</div>
-            <div className="psp-app-shell__brand-copy">
-              <strong>ProServices</strong>
-              <span>{t(getRoleDisplayName(role))}</span>
+        {!isStandalone && !isFullbleed ? (
+          <aside className="psp-app-shell__sidebar">
+            <div className="psp-app-shell__brand">
+              <div className="psp-app-shell__brand-mark">PS</div>
+              <div className="psp-app-shell__brand-copy">
+                <strong>ProServices</strong>
+                <span>{t(getRoleDisplayName(role))}</span>
+              </div>
             </div>
-          </div>
 
-          <div className="psp-app-shell__user">
-            <div className="psp-app-shell__user-label">{t('Signed In')}</div>
-            <strong>
-              {`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Account'}
-            </strong>
-            <span>{user?.email || t(getRoleDisplayName(role))}</span>
-            <div className="psp-app-shell__user-meta">
-              <span className="psp-app-shell__role-chip">{t(theme.eyebrow)}</span>
-              <span className="psp-app-shell__date-chip">{todayLabel}</span>
+            <div className="psp-app-shell__user">
+              <div className="psp-app-shell__user-label">{t('Signed In')}</div>
+              <strong>
+                {`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Account'}
+              </strong>
+              <span>{user?.email || t(getRoleDisplayName(role))}</span>
+              <div className="psp-app-shell__user-meta">
+                <span className="psp-app-shell__role-chip">{t(theme.eyebrow)}</span>
+                <span className="psp-app-shell__date-chip">{todayLabel}</span>
+              </div>
             </div>
-          </div>
 
-          <nav className="psp-app-shell__nav">
-            {items.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `psp-app-shell__nav-link ${
-                    isActive || isRouteMatch(location.pathname, item.path)
-                      ? 'psp-app-shell__nav-link--active'
-                      : ''
-                  }`
-                }
-              >
-                <span>{t(item.label)}</span>
-                <span>{'>'}</span>
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="psp-app-shell__spotlight">
-            <div className="psp-app-shell__spotlight-title">{t(theme.focusTitle)}</div>
-            <p className="psp-app-shell__spotlight-copy">{t(theme.mission)}</p>
-            <div className="psp-app-shell__spotlight-list">
-              {theme.focusItems.map((item) => (
-                <div key={item} className="psp-app-shell__spotlight-item">
-                  {t(item)}
-                </div>
+            <nav className="psp-app-shell__nav">
+              {items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `psp-app-shell__nav-link ${
+                      isActive || isRouteMatch(location.pathname, item.path)
+                        ? 'psp-app-shell__nav-link--active'
+                        : ''
+                    }`
+                  }
+                >
+                  <span>{t(item.label)}</span>
+                  <span>{'>'}</span>
+                </NavLink>
               ))}
-            </div>
-          </div>
+            </nav>
 
-          <div className="psp-app-shell__sidebar-footer">
-            <button
-              type="button"
-              onClick={() => navigate(getDefaultRouteByRole(role))}
-              className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--ghost"
-            >
-              {t('Go To Overview')}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--ghost"
-            >
-              {t('Open Marketplace')}
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--danger"
-            >
-              {t('Sign Out')}
-            </button>
-          </div>
-        </aside>
+            <div className="psp-app-shell__spotlight">
+              <div className="psp-app-shell__spotlight-title">{t(theme.focusTitle)}</div>
+              <p className="psp-app-shell__spotlight-copy">{t(theme.mission)}</p>
+              <div className="psp-app-shell__spotlight-list">
+                {theme.focusItems.map((item) => (
+                  <div key={item} className="psp-app-shell__spotlight-item">
+                    {t(item)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="psp-app-shell__sidebar-footer">
+              <button
+                type="button"
+                onClick={() => navigate(getDefaultRouteByRole(role))}
+                className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--ghost"
+              >
+                {t('Go To Overview')}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--ghost"
+              >
+                {t('Open Marketplace')}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="psp-app-shell__sidebar-button psp-app-shell__sidebar-button--danger"
+              >
+                {t('Sign Out')}
+              </button>
+            </div>
+          </aside>
+        ) : null}
 
         <main className="psp-app-shell__main">
-          {!isImmersive ? (
+          {!isImmersive && !isStandalone && !isFullbleed ? (
             <div className="psp-app-shell__topbar">
               <div className="psp-app-shell__heading-card">
                 <div className="psp-app-shell__eyebrow">{t(getRoleDisplayName(role))}</div>
@@ -323,7 +333,7 @@ export const RoleShell: React.FC<RoleShellProps> = ({
 
           <div
             className="psp-app-shell__content"
-            style={isImmersive ? { paddingTop: 0 } : undefined}
+            style={isImmersive || isFullbleed ? { paddingTop: 0 } : undefined}
           >
             {children}
           </div>

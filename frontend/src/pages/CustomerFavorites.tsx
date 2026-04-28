@@ -1,7 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Heart, MapPin, MessageCircle, Quote, Sparkles, Star, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Bookmark,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileText,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  Search,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import CustomerWorkspaceTopNav from '../components/customer/CustomerWorkspaceTopNav';
 import api from '../config/api';
 import { useI18n } from '../i18n';
 import '../styles/app-primitives.css';
@@ -18,20 +31,58 @@ interface FavoriteProvider {
   reviewsCount?: number | string | null;
   isVerified: boolean;
   profileBadgeText?: string | null;
+  responseTimeMinutes?: number | null;
+  primaryCategoryName?: string | null;
+  savedAt?: string | null;
 }
 
-const fallbackCover =
-  'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80';
-const fallbackAvatar =
-  'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
+type FavoriteFilter = 'all' | 'verified' | 'top_rated';
+
+const getInitials = (value: string) =>
+  value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+
+const formatResponseTime = (minutes?: number | null, fallback?: string) => {
+  if (!minutes || minutes <= 0) {
+    return fallback || 'Response time not shared';
+  }
+
+  if (minutes < 60) {
+    return `< ${minutes + 1} min`;
+  }
+
+  if (minutes < 120) {
+    return '< 2 h';
+  }
+
+  return `< ${Math.ceil(minutes / 60)} h`;
+};
+
+const formatSavedDate = (value?: string | null, locale = 'en-GB') => {
+  if (!value) return '';
+
+  const date = new Date(value);
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+};
 
 const CustomerFavorites: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [items, setItems] = useState<FavoriteProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'verified' | 'top_rated'>('all');
+  const [filter, setFilter] = useState<FavoriteFilter>('all');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -52,57 +103,36 @@ const CustomerFavorites: React.FC = () => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!menuOpenId) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [menuOpenId]);
+
   const removeFavorite = async (providerId: string) => {
     try {
       setRemovingId(providerId);
+      setMenuOpenId(null);
       await api.delete(`/favorites/providers/${providerId}`);
       setItems((current) => current.filter((provider) => provider.id !== providerId));
       toast.success(t('Provider removed from favorites.'));
     } catch (requestError: any) {
       toast.error(
-        requestError?.response?.data?.message ||
-          t('Failed to remove provider from favorites.')
+        requestError?.response?.data?.message || t('Failed to remove provider from favorites.')
       );
     } finally {
       setRemovingId(null);
     }
   };
-
-  const stats = useMemo(() => {
-    const verifiedCount = items.filter((item) => item.isVerified).length;
-    const averageRating =
-      items.length > 0
-        ? (
-            items.reduce((sum, item) => sum + Number(item.averageRating || 0), 0) / items.length
-          ).toFixed(1)
-        : '0.0';
-
-    return [
-      {
-        label: t('Saved providers'),
-        value: String(items.length),
-        caption: t('Your active shortlist for future comparison and follow-up.'),
-      },
-      {
-        label: t('Verified providers'),
-        value: String(verifiedCount),
-        caption: t('Saved providers that already carry marketplace trust signals.'),
-      },
-      {
-        label: t('Average shortlist rating'),
-        value: averageRating,
-        caption: t('A quick quality signal across the providers you saved.'),
-      },
-    ];
-  }, [items, t]);
-
-  const featuredShortlistItem = useMemo(() => {
-    return (
-      [...items].sort(
-        (a, b) => Number(b.averageRating || 0) - Number(a.averageRating || 0)
-      )[0] || null
-    );
-  }, [items]);
 
   const filteredItems = useMemo(() => {
     if (filter === 'verified') {
@@ -110,262 +140,266 @@ const CustomerFavorites: React.FC = () => {
     }
 
     if (filter === 'top_rated') {
-      return items.filter((item) => Number(item.averageRating || 0) >= 4);
+      return items.filter((item) => Number(item.averageRating || 0) >= 4.5);
     }
 
     return items;
   }, [filter, items]);
 
+  const counts = useMemo(
+    () => ({
+      all: items.length,
+      verified: items.filter((item) => item.isVerified).length,
+      top_rated: items.filter((item) => Number(item.averageRating || 0) >= 4.5).length,
+    }),
+    [items]
+  );
+
   if (loading) {
     return (
-      <div className="psp-page-stack">
-        <div className="h-[220px] animate-pulse rounded-[30px] bg-white/80" />
-        <div className="h-[320px] animate-pulse rounded-[28px] bg-white/80" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="psp-error-state">
-        <div className="font-bold">{t('Favorites unavailable.')}</div>
-        <div>{error}</div>
+      <div className="flex min-h-screen flex-col bg-[#f8fafc]">
+        <CustomerWorkspaceTopNav currentPage="favorites" variant="v0" />
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-6 py-8">
+          <div className="h-[88px] animate-pulse rounded-[20px] bg-white" />
+          <div className="h-[48px] animate-pulse rounded-[18px] bg-white" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="h-[250px] animate-pulse rounded-[20px] bg-white" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="psp-page-stack">
-      <section className="overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#0f172a,#1e40af_50%,#60a5fa)] p-6 text-white shadow-[0_26px_55px_rgba(15,23,42,0.14)]">
-        <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold tracking-[0.14em] text-white/90">
-              <Heart size={14} />
-              {t('Shortlist workspace')}
-            </div>
-            <h2 className="mt-5 text-[34px] font-black tracking-tight md:text-[42px]">
-              {t('Keep the providers worth returning to')}
-            </h2>
-            <p className="mt-4 max-w-[620px] text-[15px] leading-8 text-white/82">
-              {t(
-                'Favorites should reduce decision friction. From here you can reopen the profile, start a conversation, create a request, or clean the shortlist when a provider is no longer relevant.'
-              )}
-            </p>
-          </div>
+    <div className="flex min-h-screen flex-col bg-[#f8fafc]">
+      <CustomerWorkspaceTopNav currentPage="favorites" variant="v0" />
 
-          <div className="grid gap-4 rounded-[28px] bg-white/10 p-4 backdrop-blur">
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                [t('Saved now'), String(items.length)],
-                [
-                  t('Verified inside shortlist'),
-                  String(items.filter((item) => item.isVerified).length),
-                ],
-                [t('Ready to message'), String(items.length)],
-                [t('Ready to request'), String(items.length)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-[22px] bg-white/10 p-4">
-                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/62">
-                    {label}
-                  </div>
-                  <div className="mt-2 text-[24px] font-black">{value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="psp-stat-grid">
-        {stats.map((item) => (
-          <article key={item.label} className="psp-stat-card">
-            <div className="psp-stat-card__label">{item.label}</div>
-            <div className="psp-stat-card__value">{item.value}</div>
-            <div className="psp-stat-card__caption">{item.caption}</div>
-          </article>
-        ))}
-      </section>
-
-      <section className="psp-surface">
-        <div className="psp-surface__header">
-          <div>
-            <h2>Saved providers</h2>
-            <div className="psp-surface__sub">
-              {t(
-                'This is a working shortlist, not a passive list. Every card can move directly into action.'
-              )}
-            </div>
-          </div>
-          <Link to="/customer/explore" className="psp-button psp-button--primary">
-            {t('Explore more providers')}
-          </Link>
-        </div>
-
-        <div className="mb-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[24px] bg-slate-50 p-5">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Best shortlist signal')}
-            </div>
-            {featuredShortlistItem ? (
-              <>
-                <div className="mt-3 text-[24px] font-black tracking-tight text-slate-900">
-                  {featuredShortlistItem.companyName}
-                </div>
-                <div className="mt-2 text-sm leading-7 text-slate-600">
-                  {t(
-                    'Highest current rating in your saved shortlist. Use this as the fastest candidate when you want to reopen the pipeline now.'
-                  )}
-                </div>
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
-                  <Star size={14} fill="currentColor" />
-                  {Number(featuredShortlistItem.averageRating || 0).toFixed(1)}{' '}
-                  {t('average rating')}
-                </div>
-              </>
-            ) : (
-              <div className="mt-3 text-sm text-slate-600">
-                {t('Save providers from Explore to build a usable shortlist.')}
-              </div>
-            )}
-          </div>
-
-          <div className="psp-control-bar rounded-[24px]">
-            {[
-              ['all', t('All shortlist')],
-              ['verified', t('Verified only')],
-              ['top_rated', t('Top rated')],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilter(key as 'all' | 'verified' | 'top_rated')}
-                className={`psp-control-pill ${filter === key ? 'psp-control-pill--active' : ''}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {!items.length ? (
-          <div className="psp-empty-state">
-            <div className="font-bold">{t('No providers saved yet.')}</div>
-            <div className="mt-2">
-              {t('Use Explore to save providers you want to compare or contact later.')}
-            </div>
-            <Link to="/customer/explore" className="psp-button psp-button--primary mt-5">
-              {t('Open Explore')}
-            </Link>
-          </div>
-        ) : !filteredItems.length ? (
-          <div className="psp-empty-state">
-            <div className="font-bold">{t('No providers match this shortlist filter.')}</div>
-            <div className="mt-2">
-              {t('Try another filter to reopen the rest of your saved providers.')}
-            </div>
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+        {error ? (
+          <div className="psp-error-state">
+            <div className="font-bold">{t('Favorites unavailable.')}</div>
+            <div>{error}</div>
           </div>
         ) : (
-          <div className="grid gap-5 xl:grid-cols-2">
-            {filteredItems.map((provider) => {
-              const location =
-                [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') ||
-                t('Algeria');
+          <>
+            <header className="mb-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Bookmark size={18} />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-slate-950">{t('Saved providers')}</h1>
+                  <p className="text-sm text-slate-500">
+                    {items.length} {t('providers')} · {t('Your active shortlist for future comparison and follow-up.')}
+                  </p>
+                </div>
+              </div>
+            </header>
 
-              return (
-                <article
-                  key={provider.id}
-                  className="overflow-hidden rounded-[28px] border border-white/80 bg-white/95 shadow-[0_20px_40px_rgba(15,23,42,0.06)]"
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                ['all', t('All shortlist')],
+                ['verified', t('Verified only')],
+                ['top_rated', t('Top rated')],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key as FavoriteFilter)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                    filter === key
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
                 >
-                  <div className="relative h-[210px]">
-                    <img
-                      src={provider.coverUrl || provider.avatarUrl || fallbackCover}
-                      alt={provider.companyName}
-                      className="h-full w-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.08),rgba(15,23,42,0.5))]" />
-                    <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                      {provider.profileBadgeText ? (
-                        <span className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
-                          {provider.profileBadgeText}
-                        </span>
-                      ) : null}
-                      {provider.isVerified ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/90 px-3 py-1 text-xs font-bold text-slate-900">
-                          <Sparkles size={12} />
-                          {t('Verified')}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
+                  {key === 'verified' ? <CheckCircle2 size={14} /> : null}
+                  {key === 'top_rated' ? <Star size={14} /> : null}
+                  <span>{label}</span>
+                  <span className={`text-xs ${filter === key ? 'text-white/80' : 'text-slate-400'}`}>
+                    (
+                    {key === 'all'
+                      ? counts.all
+                      : key === 'verified'
+                        ? counts.verified
+                        : counts.top_rated}
+                    )
+                  </span>
+                </button>
+              ))}
+            </div>
 
-                  <div className="p-5">
-                    <div className="mt-[-56px] flex items-end gap-4">
-                      <div className="h-24 w-24 overflow-hidden rounded-[26px] border-4 border-white bg-slate-100 shadow-lg">
-                        <img
-                          src={provider.avatarUrl || provider.coverUrl || fallbackAvatar}
-                          alt={provider.companyName}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                      <div className="pb-2">
-                        <div className="text-[24px] font-black tracking-tight text-slate-900">
-                          {provider.companyName}
+            {filteredItems.length > 0 ? (
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {filteredItems.map((provider) => {
+                  const rating = Number(provider.averageRating || 0);
+                  const reviewsCount = Number(provider.reviewsCount || 0);
+                  const location =
+                    [provider.city, provider.wilaya, provider.region].filter(Boolean).join(', ') ||
+                    t('Algeria');
+                  const responseTimeLabel = t(
+                    formatResponseTime(provider.responseTimeMinutes, t('Response time not shared'))
+                  );
+                  const savedDateLabel = formatSavedDate(provider.savedAt, locale);
+
+                  return (
+                    <article
+                      key={provider.id}
+                      className={`rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm transition ${
+                        removingId === provider.id ? 'scale-[0.985] opacity-60' : ''
+                      }`}
+                    >
+                      <div className="mb-3 flex items-start gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-sm font-semibold text-blue-700">
+                          {provider.avatarUrl ? (
+                            <img
+                              src={provider.avatarUrl}
+                              alt={provider.companyName}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            getInitials(provider.companyName)
+                          )}
                         </div>
-                        <div className="mt-2 inline-flex items-center gap-2 text-sm text-slate-500">
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="truncate font-semibold text-slate-950">
+                              {provider.companyName}
+                            </h3>
+                            {provider.isVerified ? (
+                              <CheckCircle2 size={16} className="shrink-0 text-blue-600" />
+                            ) : null}
+                          </div>
+
+                          <div className="mt-1 flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <Star size={14} className="fill-amber-400 text-amber-400" />
+                              <span className="text-sm font-medium text-slate-950">
+                                {rating.toFixed(1)}
+                              </span>
+                              <span className="text-xs text-slate-500">({reviewsCount})</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div ref={menuOpenId === provider.id ? menuRef : undefined} className="relative">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMenuOpenId((current) => (current === provider.id ? null : provider.id))
+                            }
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                            aria-label={t('Actions')}
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+
+                          {menuOpenId === provider.id ? (
+                            <div className="absolute right-0 top-[calc(100%+8px)] z-10 w-[220px] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => void removeFavorite(provider.id)}
+                                disabled={removingId === provider.id}
+                                className="inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Trash2 size={14} />
+                                {t('Remove favorite')}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="mb-3 flex items-center gap-3 text-sm text-slate-500">
+                        <div className="flex min-w-0 items-center gap-1">
                           <MapPin size={14} />
-                          {location}
+                          <span className="truncate">{location}</span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Clock size={14} />
+                          <span>{responseTimeLabel}</span>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="mt-5 flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-600">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
-                        <Star size={14} fill="currentColor" />
-                        {Number(provider.averageRating || 0).toFixed(1)} {t('rating')}
-                      </span>
-                      <span>
-                        {Number(provider.reviewsCount || 0)} {t('reviews')}
-                      </span>
-                    </div>
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                          {provider.primaryCategoryName || t('No category')}
+                        </span>
+                        {provider.profileBadgeText ? (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                            {provider.profileBadgeText}
+                          </span>
+                        ) : null}
+                      </div>
 
-                    <div className="mt-5 grid gap-3 md:grid-cols-2">
-                      <Link
-                        to={`/providers/${provider.id}`}
-                        className="psp-button psp-button--primary"
-                      >
-                        {t('Open profile')}
-                      </Link>
-                      <Link
-                        to={`/providers/${provider.id}?intent=message`}
-                        className="psp-button psp-button--secondary"
-                      >
-                        <MessageCircle size={16} />
-                        {t('Message')}
-                      </Link>
-                      <Link
-                        to={`/providers/${provider.id}?intent=request`}
-                        className="psp-button psp-button--secondary"
-                      >
-                        <Quote size={16} />
-                        {t('Request service')}
-                      </Link>
-                      <button
-                        type="button"
-                        className="psp-button psp-button--danger"
-                        disabled={removingId === provider.id}
-                        onClick={() => removeFavorite(provider.id)}
-                      >
-                        <Trash2 size={16} />
-                        {removingId === provider.id ? t('Removing...') : t('Remove favorite')}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                      {savedDateLabel ? (
+                        <p className="mb-4 text-xs text-slate-400">{savedDateLabel}</p>
+                      ) : null}
+
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/providers/${provider.id}`}
+                          className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-slate-900"
+                        >
+                          <ExternalLink size={14} />
+                          {t('View profile')}
+                        </Link>
+
+                        <Link
+                          to={`/providers/${provider.id}?intent=message`}
+                          className="inline-flex h-9 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                          aria-label={t('Message')}
+                        >
+                          <MessageCircle size={15} />
+                        </Link>
+
+                        <Link
+                          to={`/providers/${provider.id}?intent=request`}
+                          className="inline-flex h-9 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                          aria-label={t('Request service')}
+                        >
+                          <FileText size={15} />
+                        </Link>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="mt-10 flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                  <Bookmark size={24} className="text-slate-400" />
+                </div>
+                <h3 className="text-base font-medium text-slate-950">{t('No providers saved yet.')}</h3>
+                <p className="mt-1 max-w-xs text-sm text-slate-500">
+                  {t('Use Explore to save providers you want to compare or contact later.')}
+                </p>
+                <Link
+                  to="/customer/explore"
+                  className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-900"
+                >
+                  <Search size={16} className="mr-2" />
+                  {t('Explore Providers')}
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-10 flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                  <Search size={24} className="text-slate-400" />
+                </div>
+                <h3 className="text-base font-medium text-slate-950">
+                  {t('No providers match this shortlist filter.')}
+                </h3>
+                <p className="mt-1 max-w-xs text-sm text-slate-500">
+                  {t('Try another filter to reopen the rest of your saved providers.')}
+                </p>
+              </div>
+            )}
+          </>
         )}
-      </section>
+      </div>
     </div>
   );
 };

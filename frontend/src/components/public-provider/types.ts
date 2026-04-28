@@ -20,6 +20,7 @@ export interface ProviderStoryItem {
   providerName: string;
   providerAvatarUrl?: string | null;
   providerLocation?: string | null;
+  createdAt?: string;
   mediaType: 'image' | 'video';
   mediaUrl: string;
   thumbnailUrl?: string | null;
@@ -53,11 +54,20 @@ export interface PublicProviderPayload {
     averageRating: string;
     reviewsCount: number;
     responseTimeMinutes: number;
+    responseRate?: number;
+    completedJobs?: number;
+    createdAt?: string;
     isVerified: boolean;
     status: string;
     primaryCategory?: { id: string; name: string; slug: string } | null;
     owner: { firstName: string; lastName: string };
-    contact: { email?: string | null; phoneNumber?: string | null; addressLine?: string | null };
+    contact: {
+      email?: string | null;
+      phoneNumber?: string | null;
+      addressLine?: string | null;
+      website?: string | null;
+      businessHours?: string | null;
+    };
     preference: {
       selectedPlan: 'basic' | 'pro' | 'business';
       featuredOnHomepage: boolean;
@@ -79,6 +89,7 @@ export interface PublicProviderPayload {
   }>;
   media: Array<{
     id: string;
+    createdAt?: string;
     mediaType: 'image' | 'video';
     mediaUrl: string;
     thumbnailUrl?: string | null;

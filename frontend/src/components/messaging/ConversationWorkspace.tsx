@@ -6,19 +6,28 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
+  ArrowRight,
   BadgeCheck,
   Bot,
+  CheckCircle2,
   Clock3,
+  ExternalLink,
+  FileText,
   MessageSquare,
+  Paperclip,
+  Search,
   Send,
   ShieldCheck,
   Sparkles,
+  Star,
   Wand2,
 } from 'lucide-react';
 import api from '../../config/api';
+import CustomerWorkspaceTopNav from '../customer/CustomerWorkspaceTopNav';
+import ProviderWorkspaceTopNav from '../provider/ProviderWorkspaceTopNav';
 import { useI18n } from '../../i18n';
 import '../../styles/app-primitives.css';
 
@@ -37,6 +46,10 @@ interface ConversationListItem {
     avatarUrl?: string | null;
     isVerified?: boolean;
     profileBadgeText?: string | null;
+    averageRating?: string | number | null;
+    reviewsCount?: number | null;
+    responseTimeMinutes?: number | null;
+    primaryCategoryName?: string | null;
   };
   customer: {
     id: string;
@@ -47,6 +60,9 @@ interface ConversationListItem {
   service?: {
     id: string;
     name: string;
+    categoryName?: string | null;
+    price?: string | null;
+    currencyCode?: string | null;
   } | null;
 }
 
@@ -77,6 +93,19 @@ interface AiPreview {
 
 interface ConversationWorkspaceProps {
   mode: WorkspaceMode;
+}
+
+interface CustomerRequestSummary {
+  id: string;
+  conversationId?: string | null;
+  status: string;
+  subject?: string | null;
+  updatedAt: string;
+}
+
+interface CustomerRequestDraft {
+  subject: string;
+  description: string;
 }
 
 const LIST_COPY: Record<
@@ -147,6 +176,77 @@ const formatMessageTime = (value?: string | null, locale = 'en-GB') => {
   }).format(new Date(value));
 };
 
+const formatMessageDateDivider = (value?: string | null, locale = 'en-GB') => {
+  if (!value) return '';
+
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today';
+  }
+
+  if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+};
+
+const formatRating = (value?: string | number | null) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+
+  return numeric.toFixed(1);
+};
+
+const formatResponseLabel = (minutes?: number | null) => {
+  if (!minutes || minutes <= 0) {
+    return 'Response time not shared';
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  if (minutes === 60) {
+    return '< 1 hour';
+  }
+
+  return `${Math.ceil(minutes / 60)} h`;
+};
+
+const getRequestStatusLabel = (status?: string | null) => {
+  switch (status) {
+    case 'new':
+      return 'New';
+    case 'reviewed':
+      return 'Reviewed';
+    case 'quoted':
+      return 'Quote sent';
+    case 'accepted':
+      return 'Accepted';
+    case 'rejected':
+      return 'Rejected';
+    case 'in_progress':
+      return 'In progress';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return status || 'Open';
+  }
+};
+
 const sortConversationsByRecency = (items: ConversationListItem[]) =>
   [...items].sort((left, right) => {
     const leftTime = left.lastMessageAt ? new Date(left.lastMessageAt).getTime() : 0;
@@ -165,6 +265,7 @@ const getInitials = (value: string) =>
 
 export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mode }) => {
   const { locale, t } = useI18n();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const providerId = mode === 'customer' ? searchParams.get('providerId') : null;
@@ -185,6 +286,18 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
   const [draft, setDraft] = useState('');
   const [aiPreview, setAiPreview] = useState<AiPreview | null>(null);
   const [threadConversationId, setThreadConversationId] = useState<string | null>(null);
+  const [conversationSearch, setConversationSearch] = useState('');
+  const [customerRequests, setCustomerRequests] = useState<Record<string, CustomerRequestSummary>>(
+    {}
+  );
+  const [loadingCustomerRequests, setLoadingCustomerRequests] = useState(false);
+  const [showRequestComposer, setShowRequestComposer] = useState(false);
+  const [creatingRequest, setCreatingRequest] = useState(false);
+  const [requestDraft, setRequestDraft] = useState<CustomerRequestDraft>({
+    subject: '',
+    description: '',
+  });
+  const [navRefreshKey, setNavRefreshKey] = useState(0);
 
   const hasBootstrappedListRef = useRef(false);
   const openFromProfileRef = useRef<string | null>(null);
@@ -198,6 +311,8 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
     () => conversations.find((item) => item.id === selectedConversationId) || null,
     [conversations, selectedConversationId]
   );
+  const selectedLinkedRequest =
+    mode === 'customer' && selectedConversationId ? customerRequests[selectedConversationId] || null : null;
 
   const counterpartName =
     mode === 'customer'
@@ -208,6 +323,10 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
 
   const unreadThreads = conversations.filter((item) => item.unreadCount > 0).length;
   const serviceLinkedThreads = conversations.filter((item) => Boolean(item.service?.name)).length;
+  const unreadMessagesCount = conversations.reduce(
+    (total, conversation) => total + Number(conversation.unreadCount || 0),
+    0
+  );
   const isSwitchingConversation =
     Boolean(selectedConversationId) &&
     Boolean(threadConversationId) &&
@@ -218,6 +337,29 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
     selectedConversation?.subject ||
     t('General conversation');
   const selectedStatusLabel = selectedConversation?.status || t('open');
+  const filteredConversations = useMemo(() => {
+    const query = conversationSearch.trim().toLowerCase();
+    if (!query) {
+      return conversations;
+    }
+
+    return conversations.filter((conversation) => {
+      const counterpart =
+        mode === 'customer'
+          ? conversation.provider.companyName
+          : `${conversation.customer.firstName} ${conversation.customer.lastName}`.trim();
+      const searchable = [
+        counterpart,
+        conversation.lastMessagePreview || '',
+        conversation.subject || '',
+        conversation.service?.name || '',
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [conversationSearch, conversations, mode]);
   const providerReplyGuidance = useMemo(() => {
     if (mode !== 'provider' || !selectedConversation) {
       return '';
@@ -366,6 +508,50 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
     [t]
   );
 
+  const refreshCustomerRequests = useCallback(
+    async (silent = false) => {
+      if (mode !== 'customer') {
+        return;
+      }
+
+      try {
+        if (!silent) {
+          setLoadingCustomerRequests(true);
+        }
+
+        const response = await api.get('/orders/customer');
+        const items: CustomerRequestSummary[] = Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+
+        const nextMap = items.reduce<Record<string, CustomerRequestSummary>>((acc, item) => {
+          if (!item.conversationId) {
+            return acc;
+          }
+
+          const current = acc[item.conversationId];
+          if (
+            !current ||
+            new Date(item.updatedAt).getTime() > new Date(current.updatedAt).getTime()
+          ) {
+            acc[item.conversationId] = item;
+          }
+
+          return acc;
+        }, {});
+
+        setCustomerRequests(nextMap);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!silent) {
+          setLoadingCustomerRequests(false);
+        }
+      }
+    },
+    [mode]
+  );
+
   const selectConversation = useCallback((conversationId: string | null) => {
     if (selectedConversationIdRef.current === conversationId) {
       return;
@@ -393,6 +579,47 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
 
     setLoadingMessages(true);
   }, []);
+
+  const submitCustomerRequest = async () => {
+    if (mode !== 'customer' || !selectedConversation) {
+      return;
+    }
+
+    if (!requestDraft.description.trim()) {
+      toast.error(t('Request description is required.'));
+      return;
+    }
+
+    try {
+      setCreatingRequest(true);
+
+      const response = await api.post('/orders', {
+        providerId: selectedConversation.provider.id,
+        serviceId: selectedConversation.service?.id || null,
+        subject: requestDraft.subject.trim() || selectedServiceLabel,
+        description: requestDraft.description.trim(),
+      });
+
+      toast.success(t('Request created.'));
+      setShowRequestComposer(false);
+      setRequestDraft({
+        subject: selectedConversation.service?.name || selectedConversation.subject || '',
+        description: '',
+      });
+      setNavRefreshKey((current) => current + 1);
+      await refreshCustomerRequests(true);
+
+      navigate(
+        response.data?.data?.id
+          ? `/customer/orders?requestId=${response.data.data.id}`
+          : '/customer/orders'
+      );
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || t('Failed to create the request.'));
+    } finally {
+      setCreatingRequest(false);
+    }
+  };
 
   const openConversationFromProfile = useCallback(async () => {
     if (mode !== 'customer' || !providerId) {
@@ -547,6 +774,14 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
   }, [mode, openConversationFromProfile, providerId, serviceId]);
 
   useEffect(() => {
+    if (mode !== 'customer') {
+      return;
+    }
+
+    void refreshCustomerRequests();
+  }, [mode, refreshCustomerRequests]);
+
+  useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
 
@@ -578,37 +813,652 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
     });
   }, [messages]);
 
+  useEffect(() => {
+    if (mode !== 'customer') {
+      return;
+    }
+
+    setShowRequestComposer(false);
+    setRequestDraft({
+      subject: selectedConversation?.service?.name || selectedConversation?.subject || '',
+      description: '',
+    });
+  }, [mode, selectedConversation?.id, selectedConversation?.service?.name, selectedConversation?.subject]);
+
+  const customerLayout =
+    mode === 'customer' ? (
+      (() => {
+        const selectedProviderRating = formatRating(selectedConversation?.provider.averageRating);
+        const showRequestPrompt = Boolean(
+          selectedConversation && !selectedLinkedRequest && messages.length >= 3
+        );
+        const originLabel = selectedConversation?.service?.id
+          ? t('Service inquiry')
+          : t('Provider profile');
+        const servicePriceLabel =
+          selectedConversation?.service?.price && selectedConversation?.service?.currencyCode
+            ? `${selectedConversation.service.price} ${selectedConversation.service.currencyCode}`
+            : t('Custom pricing');
+
+        return (
+          <div className="flex h-full min-h-screen flex-col bg-slate-50">
+            <CustomerWorkspaceTopNav
+              currentPage="messages"
+              unreadMessagesCount={unreadMessagesCount}
+              refreshKey={navRefreshKey}
+              variant="v0"
+            />
+
+            <div className="flex flex-1 min-h-0">
+              <div className="hidden w-[280px] shrink-0 border-r border-slate-200 bg-white md:block">
+                <div className="flex h-full flex-col">
+                  <div className="space-y-3 border-b border-slate-200 p-4">
+                    <h2 className="font-semibold text-slate-950">{t('Messages')}</h2>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={conversationSearch}
+                        onChange={(event) => setConversationSearch(event.target.value)}
+                        placeholder={t('Search conversations')}
+                        className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-200 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {creatingConversation ? (
+                      <div className="p-6 text-center text-sm text-slate-500">
+                        {t('Opening the conversation with this provider...')}
+                      </div>
+                    ) : loadingList ? (
+                      <div className="p-6 text-center text-sm text-slate-500">
+                        {t(LIST_COPY.customer.loadingList)}
+                      </div>
+                    ) : !conversations.length ? (
+                      <div className="p-6 text-center text-sm text-slate-500">
+                        {t(LIST_COPY.customer.empty)}
+                      </div>
+                    ) : !filteredConversations.length ? (
+                      <div className="p-6 text-center text-sm text-slate-500">
+                        {t('No matching conversations yet.')}
+                      </div>
+                    ) : (
+                      <div className="py-1">
+                        {filteredConversations.map((conversation) => {
+                          const counterpart = conversation.provider.companyName;
+                          const serviceLabel =
+                            conversation.service?.name ||
+                            conversation.subject ||
+                            t('Service conversation');
+                          const isSelected = selectedConversationId === conversation.id;
+
+                          return (
+                            <button
+                              key={conversation.id}
+                              type="button"
+                              onClick={() => selectConversation(conversation.id)}
+                              className={`w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${
+                                isSelected ? 'border-l-2 border-l-blue-600 bg-slate-100' : ''
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="relative shrink-0">
+                                  <div className="h-10 w-10 overflow-hidden rounded-full bg-blue-50">
+                                    {conversation.provider.avatarUrl ? (
+                                      <img
+                                        src={conversation.provider.avatarUrl}
+                                        alt={counterpart}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-blue-700">
+                                        {getInitials(counterpart)}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {conversation.unreadCount > 0 ? (
+                                    <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-blue-600 ring-2 ring-white" />
+                                  ) : null}
+                                </div>
+
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex min-w-0 items-center gap-1.5">
+                                      <span
+                                        className={`truncate text-sm ${
+                                          conversation.unreadCount > 0
+                                            ? 'font-semibold text-slate-950'
+                                            : 'font-medium text-slate-950'
+                                        }`}
+                                      >
+                                        {counterpart}
+                                      </span>
+                                      {conversation.provider.isVerified ? (
+                                        <CheckCircle2 size={14} className="shrink-0 text-blue-600" />
+                                      ) : null}
+                                    </div>
+                                    <span className="shrink-0 text-xs text-slate-400">
+                                      {formatRelativeTime(conversation.lastMessageAt, locale)}
+                                    </span>
+                                  </div>
+
+                                  {serviceLabel ? (
+                                    <p className="truncate text-xs text-blue-700">{serviceLabel}</p>
+                                  ) : null}
+
+                                  <p
+                                    className={`truncate text-xs ${
+                                      conversation.unreadCount > 0
+                                        ? 'font-medium text-slate-900'
+                                        : 'text-slate-500'
+                                    }`}
+                                  >
+                                    {conversation.lastMessagePreview || t('No messages yet.')}
+                                  </p>
+                                </div>
+
+                                {conversation.unreadCount > 0 ? (
+                                  <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
+                                    {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex min-w-0 flex-1 flex-col bg-slate-50">
+                {loadingMessages && selectedConversationId ? (
+                  <div className="flex h-full flex-col">
+                    <div className="border-b border-slate-200 bg-white px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 animate-pulse rounded-full bg-slate-200" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-32 animate-pulse rounded bg-slate-200" />
+                          <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-6">
+                      <div className="space-y-4">
+                        {[1, 2, 3].map((item) => (
+                          <div
+                            key={item}
+                            className={`flex ${item % 2 === 0 ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`animate-pulse rounded-2xl bg-slate-200 ${
+                                item % 2 === 0 ? 'h-16 w-48' : 'h-16 w-64'
+                              }`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : !selectedConversation ? (
+                  <div className="flex h-full items-center justify-center p-8">
+                    <div className="max-w-[420px] text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                        <MessageSquare size={20} />
+                      </div>
+                      <div className="mt-4 text-base font-semibold text-slate-950">
+                        {t('Select a conversation')}
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-slate-500">
+                        {t('Choose a conversation from the list to view messages and continue your discussion.')}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="border-b border-slate-200 bg-white px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 overflow-hidden rounded-full bg-blue-50">
+                          {selectedConversation.provider.avatarUrl ? (
+                            <img
+                              src={selectedConversation.provider.avatarUrl}
+                              alt={counterpartName}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-blue-700">
+                              {getInitials(counterpartName)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-950">{counterpartName}</span>
+                            {selectedConversation.provider.isVerified ? (
+                              <CheckCircle2 size={16} className="text-blue-600" />
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>
+                              {selectedConversation.provider.primaryCategoryName ||
+                                t('Professional services')}
+                            </span>
+                            {selectedProviderRating ? (
+                              <>
+                                <span className="text-slate-300">·</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Star size={12} className="fill-amber-500 text-amber-500" />
+                                  {selectedProviderRating}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedConversation.service ? (
+                        <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                          {selectedConversation.service.categoryName ? (
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                              {selectedConversation.service.categoryName}
+                            </span>
+                          ) : null}
+                          <span className="text-sm font-medium text-slate-900">
+                            {selectedConversation.service.name}
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-xs text-slate-500">{servicePriceLabel}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className={`flex-1 overflow-y-auto ${isSwitchingConversation ? 'opacity-60' : ''}`}
+                    >
+                      <div className="space-y-3 px-6 py-4">
+                        {!messages.length ? (
+                          <div className="psp-empty-state">{t(LIST_COPY.customer.placeholder)}</div>
+                        ) : (
+                          messages.map((message, index) => {
+                            const mine = message.senderRole === 'customer';
+                            const showDateDivider =
+                              index === 0 ||
+                              new Date(message.createdAt).toDateString() !==
+                                new Date(messages[index - 1].createdAt).toDateString();
+
+                            return (
+                              <div key={message.id}>
+                                {showDateDivider ? (
+                                  <div className="flex items-center gap-3 py-4">
+                                    <div className="h-px flex-1 bg-slate-200" />
+                                    <span className="text-xs font-medium text-slate-400">
+                                      {t(formatMessageDateDivider(message.createdAt, locale))}
+                                    </span>
+                                    <div className="h-px flex-1 bg-slate-200" />
+                                  </div>
+                                ) : null}
+
+                                <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                                  <div
+                                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                                      mine
+                                        ? 'rounded-br-md bg-blue-600 text-white'
+                                        : 'rounded-bl-md bg-slate-100 text-slate-900'
+                                    }`}
+                                  >
+                                    <p className="whitespace-pre-wrap text-sm">{message.body}</p>
+                                    <p
+                                      className={`mt-1 text-[10px] ${
+                                        mine ? 'text-white/70' : 'text-slate-500'
+                                      }`}
+                                    >
+                                      {formatMessageTime(message.createdAt, locale)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+
+                        <div ref={messagesEndRef} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t border-slate-200 bg-white px-6 py-4">
+                      {selectedLinkedRequest ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/customer/orders?requestId=${selectedLinkedRequest.id}`)}
+                          className="group flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-slate-100"
+                        >
+                          <div className="text-left text-sm">
+                            <span className="font-medium text-slate-900">{t('Request Status')}</span>
+                            <span className="ml-2 text-slate-500">
+                              {t(getRequestStatusLabel(selectedLinkedRequest.status))}
+                            </span>
+                          </div>
+                          <ArrowRight size={16} className="text-slate-500 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      ) : showRequestPrompt ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowRequestComposer(true)}
+                          className="group flex w-full items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 transition hover:bg-blue-100"
+                        >
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium text-blue-700">{t('Ready to proceed?')}</span>
+                            <span className="text-slate-500">{t('Request a quote from this provider')}</span>
+                          </div>
+                          <ArrowRight size={16} className="text-blue-700 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      ) : null}
+
+                      <div className="flex items-end gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          disabled
+                        >
+                          <Paperclip size={16} />
+                        </button>
+
+                        <div className="relative flex-1">
+                          <textarea
+                            rows={1}
+                            value={draft}
+                            onChange={(event) => setDraft(event.target.value)}
+                            onKeyDown={handleDraftKeyDown}
+                            placeholder={t('Type your message...')}
+                            className="min-h-[44px] max-h-32 w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-3 pr-12 text-sm text-slate-900 outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void sendMessage(false)}
+                          disabled={sending || !draft.trim()}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Send size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="hidden w-[300px] shrink-0 border-l border-slate-200 bg-white lg:block">
+                {!selectedConversation ? (
+                  <div className="p-5 text-center text-sm text-slate-500">
+                    <MessageSquare size={32} className="mx-auto mb-3 text-slate-300" />
+                    <p>{t('Select a conversation to see details')}</p>
+                  </div>
+                ) : (
+                  <div className="h-full overflow-y-auto p-5">
+                    <div className="space-y-4">
+                      <section>
+                        <h3 className="text-sm font-semibold text-slate-950">{t('Provider')}</h3>
+                        <div className="mt-3 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-blue-100">
+                              {selectedConversation.provider.avatarUrl ? (
+                                <img
+                                  src={selectedConversation.provider.avatarUrl}
+                                  alt={selectedConversation.provider.companyName}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-blue-50 font-medium text-blue-700">
+                                  {getInitials(selectedConversation.provider.companyName)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-semibold text-slate-950">
+                                  {selectedConversation.provider.companyName}
+                                </span>
+                                {selectedConversation.provider.isVerified ? (
+                                  <CheckCircle2 size={16} className="text-blue-600" />
+                                ) : null}
+                              </div>
+                              <p className="text-sm text-slate-500">
+                                {selectedConversation.provider.primaryCategoryName ||
+                                  t('Professional services')}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                              <Star size={16} className="fill-amber-500 text-amber-500" />
+                              <div className="text-sm">
+                                <span className="font-semibold text-slate-900">
+                                  {selectedProviderRating || t('N/A')}
+                                </span>
+                                <span className="ml-1 text-xs text-slate-500">
+                                  ({selectedConversation.provider.reviewsCount || 0})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                              <Clock3 size={16} className="text-slate-400" />
+                              <span className="text-sm text-slate-500">
+                                {t(formatResponseLabel(selectedConversation.provider.responseTimeMinutes))}
+                              </span>
+                            </div>
+                          </div>
+
+                          <Link
+                            to={`/providers/${selectedConversation.provider.id}`}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                          >
+                            {t('View Full Profile')}
+                            <ExternalLink size={14} />
+                          </Link>
+                        </div>
+                      </section>
+
+                      {selectedConversation.service ? (
+                        <>
+                          <div className="border-t border-slate-200" />
+                          <section>
+                            <h3 className="text-sm font-semibold text-slate-950">{t('Service')}</h3>
+                            <div className="mt-3 space-y-3">
+                              <div className="rounded-lg bg-slate-50 px-3 py-3">
+                                {selectedConversation.service.categoryName ? (
+                                  <div className="mb-2">
+                                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-normal text-slate-600">
+                                      {selectedConversation.service.categoryName}
+                                    </span>
+                                  </div>
+                                ) : null}
+                                <p className="font-medium text-slate-950">
+                                  {selectedConversation.service.name}
+                                </p>
+                                <div className="mt-1 text-sm text-slate-500">{servicePriceLabel}</div>
+                              </div>
+                            </div>
+                          </section>
+                        </>
+                      ) : null}
+
+                      <div className="border-t border-slate-200" />
+
+                      <section>
+                        <h3 className="text-sm font-semibold text-slate-950">
+                          {selectedLinkedRequest ? t('Request Status') : t('Next Step')}
+                        </h3>
+                        <div className="mt-3 space-y-3">
+                          {loadingCustomerRequests ? (
+                            <div className="text-sm text-slate-500">{t('Loading requests...')}</div>
+                          ) : selectedLinkedRequest ? (
+                            <>
+                              <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-3">
+                                <FileText size={18} className="text-blue-600" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-slate-950">
+                                    {selectedLinkedRequest.subject || t('Service request')}
+                                  </p>
+                                  <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                    {t(getRequestStatusLabel(selectedLinkedRequest.status))}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(`/customer/orders?requestId=${selectedLinkedRequest.id}`)
+                                }
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                              >
+                                {t('View Request')}
+                                <ArrowRight size={14} />
+                              </button>
+                            </>
+                          ) : showRequestComposer ? (
+                            <div className="space-y-3">
+                              <input
+                                value={requestDraft.subject}
+                                onChange={(event) =>
+                                  setRequestDraft((current) => ({
+                                    ...current,
+                                    subject: event.target.value,
+                                  }))
+                                }
+                                placeholder={t('Request title')}
+                                className="psp-input"
+                              />
+                              <textarea
+                                rows={5}
+                                value={requestDraft.description}
+                                onChange={(event) =>
+                                  setRequestDraft((current) => ({
+                                    ...current,
+                                    description: event.target.value,
+                                  }))
+                                }
+                                placeholder={t('Describe what you need')}
+                                className="psp-textarea min-h-[150px]"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void submitCustomerRequest()}
+                                  disabled={creatingRequest}
+                                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {t(creatingRequest ? 'Creating request...' : 'Create Request')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowRequestComposer(false)}
+                                  className="inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                                >
+                                  {t('Cancel')}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-start gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+                                <ArrowRight size={18} className="mt-0.5 text-blue-600" />
+                                <div>
+                                  <p className="text-sm font-medium text-slate-950">
+                                    {t('No request created yet')}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {t('When you are ready, create a formal request to get a quote from this provider.')}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowRequestComposer(true)}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                              >
+                                {t('Create Request')}
+                                <ArrowRight size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </section>
+
+                      <div className="border-t border-slate-200" />
+
+                      <section>
+                        <h3 className="text-sm font-semibold text-slate-950">{t('Conversation')}</h3>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-500">{t('Started from')}</span>
+                            <span className="text-slate-900">{originLabel}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-500">{t('Last activity')}</span>
+                            <span className="text-slate-900">
+                              {formatMessageTime(selectedConversation.lastMessageAt, locale)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-500">{t('Messages')}</span>
+                            <span className="text-slate-900">{messages.length}</span>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()
+    ) : null;
+
+  if (customerLayout) {
+    return customerLayout;
+  }
+
   return (
-    <div className="psp-page-stack">
-      <section className="psp-surface">
+    <div className="min-h-screen bg-slate-50">
+      <ProviderWorkspaceTopNav
+        currentPage="messages"
+        unreadMessagesCount={unreadMessagesCount}
+        refreshKey={navRefreshKey}
+        fluid
+      />
+
+      <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div className="grid gap-6">
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Messaging workspace')}
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              {t('Commercial inbox')}
             </div>
-            <h2 className="mt-2 text-[30px] font-black tracking-tight text-slate-900">
-              {t(mode === 'customer' ? 'Provider conversations' : 'Commercial inbox')}
+            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-slate-950 sm:text-[36px]">
+              {t('Reply faster with clearer context and stronger commercial quality.')}
             </h2>
-            <div className="mt-3 max-w-[760px] text-[15px] leading-8 text-slate-600">
+            <div className="mt-3 max-w-[760px] text-sm leading-7 text-slate-600">
               {t(
-                mode === 'customer'
-                  ? 'Review the provider, the linked service, the current thread, and the next message in one clean workspace.'
-                  : 'Reply faster with clearer customer identity, service context, and AI draft support.'
+                'Keep customer identity, service context, unread activity, and AI-assisted draft support in one continuous provider workspace.'
               )}
             </div>
           </div>
 
-          <div
-            className={`grid min-w-[280px] gap-3 ${
-              mode === 'provider' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
-            }`}
-          >
+          <div className="grid min-w-[320px] gap-3 sm:grid-cols-3">
             {overviewCards.map((card) => (
-              <div key={card.label} className="rounded-[22px] bg-slate-50 px-4 py-4">
-                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              <div
+                key={card.label}
+                className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                   {t(card.label)}
                 </div>
-                <div className="mt-2 text-[24px] font-black text-slate-900">{card.value}</div>
+                <div className="mt-2 text-[24px] font-semibold text-slate-950">{card.value}</div>
               </div>
             ))}
           </div>
@@ -616,7 +1466,7 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
-        <aside className="psp-surface xl:sticky xl:top-6 xl:self-start">
+        <aside className="psp-surface xl:sticky xl:top-24 xl:self-start">
           <div className="psp-surface__header">
             <div>
               <h2>{t(LIST_COPY[mode].title)}</h2>
@@ -1189,6 +2039,8 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({ mo
           )}
         </aside>
       </section>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import PublicMarketplaceLayout from '../components/PublicMarketplaceLayout';
 import StoryViewer from '../components/stories/StoryViewer';
 import api from '../config/api';
 import ProviderHero from '../components/public-provider/ProviderHero';
 import ProviderMediaSection from '../components/public-provider/ProviderMediaSection';
 import ProviderProfileDetails from '../components/public-provider/ProviderProfileDetails';
-import ProviderQuickNav from '../components/public-provider/ProviderQuickNav';
+import PublicProviderTopNav from '../components/public-provider/PublicProviderTopNav';
+import ProviderRequestEntryBlock from '../components/public-provider/ProviderRequestEntryBlock';
 import ProviderRequestPanel from '../components/public-provider/ProviderRequestPanel';
 import ProviderReviewsSection from '../components/public-provider/ProviderReviewsSection';
 import ProviderServicesSection from '../components/public-provider/ProviderServicesSection';
@@ -280,23 +280,23 @@ const PublicProviderPage: React.FC = () => {
       return;
     }
 
-      if (intent === 'favorite') {
-        if (!isFavorite) {
-          void api
-            .post(`/favorites/providers/${id}`)
-            .then(() => {
-              setIsFavorite(true);
-              toast.success(t('Provider added to favorites.'));
-              void loadPage({ silent: true });
-            })
-            .catch((requestError: any) => {
-              toast.error(requestError.response?.data?.message || t('Failed to update favorites.'));
-            })
-            .finally(() => clearIntent());
-        } else {
-          clearIntent();
-        }
+    if (intent === 'favorite') {
+      if (!isFavorite) {
+        void api
+          .post(`/favorites/providers/${id}`)
+          .then(() => {
+            setIsFavorite(true);
+            toast.success(t('Provider added to favorites.'));
+            void loadPage({ silent: true });
+          })
+          .catch((requestError: any) => {
+            toast.error(requestError.response?.data?.message || t('Failed to update favorites.'));
+          })
+          .finally(() => clearIntent());
+      } else {
+        clearIntent();
       }
+    }
   }, [currentUser?.role, id, intent, isFavorite, loadPage, navigate, searchParams, setSearchParams, t, token]);
 
   const requireCustomerForPath = useCallback(
@@ -623,20 +623,24 @@ const PublicProviderPage: React.FC = () => {
 
   if (loading) {
     return (
-      <PublicMarketplaceLayout activeNav="explore">
-        <div className="grid gap-6 pt-8">
-          <div className="h-[320px] animate-pulse rounded-[30px] bg-white/80" />
-          <div className="h-[220px] animate-pulse rounded-[28px] bg-white/80" />
-          <div className="h-[420px] animate-pulse rounded-[28px] bg-white/80" />
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f7faff_0%,_#dfe9f7_42%,_#d0ddf0_100%)] text-slate-900">
+        <div className="psp-desktop-frame py-4 sm:py-6">
+          <PublicProviderTopNav providerName={t('Provider page')} />
+          <div className="psp-loading-stack">
+            <div className="psp-loading-block psp-loading-block--lg" />
+            <div className="psp-loading-block psp-loading-block--sm" />
+            <div className="psp-loading-block psp-loading-block--md" />
+          </div>
         </div>
-      </PublicMarketplaceLayout>
+      </div>
     );
   }
 
   if (error || !data) {
     return (
-      <PublicMarketplaceLayout activeNav="explore">
-        <div className="pt-8">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f7faff_0%,_#dfe9f7_42%,_#d0ddf0_100%)] text-slate-900">
+        <div className="psp-desktop-frame py-4 sm:py-6">
+          <PublicProviderTopNav providerName={t('Provider page')} />
           <div className="psp-error-state">
             <div className="font-bold">{t('Provider page unavailable.')}</div>
             <div>{error || t('This provider could not be found.')}</div>
@@ -649,7 +653,7 @@ const PublicProviderPage: React.FC = () => {
             </button>
           </div>
         </div>
-      </PublicMarketplaceLayout>
+      </div>
     );
   }
 
@@ -671,90 +675,97 @@ const PublicProviderPage: React.FC = () => {
       : t('Reply to this story...');
 
   return (
-    <PublicMarketplaceLayout activeNav="explore">
-      <div className="grid gap-8 pt-8">
-        <ProviderHero
-          provider={provider}
-          providerLocation={providerLocation}
-          ownerName={ownerName}
-          isFavorite={isFavorite}
-          storiesCount={stories.length}
-          onOpenStories={() => {
-            if (stories[0]) {
-              openStory(stories[0].id);
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f7faff_0%,_#dfe9f7_42%,_#d0ddf0_100%)] text-slate-900">
+      <div className="psp-desktop-frame py-4 sm:py-6">
+        <PublicProviderTopNav providerName={provider.companyName} hasStories={stories.length > 0} />
+
+        <div className="grid gap-8 pb-10">
+          <ProviderHero
+            provider={provider}
+            providerLocation={providerLocation}
+            ownerName={ownerName}
+            isFavorite={isFavorite}
+            storiesCount={stories.length}
+            onOpenStories={() => {
+              if (stories[0]) {
+                openStory(stories[0].id);
+              }
+            }}
+            onMessage={handleContact}
+            onRequest={() => handleRequest()}
+            onToggleFavorite={toggleFavorite}
+          />
+
+          <ProviderRequestEntryBlock
+            provider={provider}
+            onMessage={handleContact}
+            onRequest={() => handleRequest()}
+          />
+
+          <div className="mt-4">
+            <ProviderRequestPanel
+              visible={showRequestForm}
+              services={services}
+              requestForm={requestForm}
+              submitting={submittingRequest}
+              onClose={() => setShowRequestForm(false)}
+              onChange={(field, value) =>
+                setRequestForm((current) => ({
+                  ...current,
+                  [field]: value,
+                }))
+              }
+              onSubmit={() => void submitRequest()}
+            />
+          </div>
+
+          <ProviderServicesSection
+            services={services}
+            onRequest={handleRequest}
+            onExploreCategory={handleExploreCategory}
+          />
+
+          <ProviderStoriesSection stories={stories} onOpenStory={openStory} />
+
+          <ProviderMediaSection
+            media={media}
+            commentsMap={commentsMap}
+            commentDrafts={commentDrafts}
+            likedMap={likedMap}
+            actionMediaId={actionMediaId}
+            onRefreshComments={refreshMediaComments}
+            onToggleLike={handleToggleLike}
+            onDraftChange={handleCommentDraftChange}
+            onAddComment={handleAddComment}
+          />
+
+          <ProviderReviewsSection
+            reviews={reviews}
+            averageRating={Number(provider.averageRating || 0)}
+            reviewCount={provider.reviewsCount}
+            reviewForm={reviewForm}
+            hasExistingReview={hasExistingReview}
+            onRatingChange={(rating) =>
+              setReviewForm((current) => ({
+                ...current,
+                rating,
+              }))
             }
-          }}
-          onMessage={handleContact}
-          onRequest={() => handleRequest()}
-          onToggleFavorite={toggleFavorite}
-        />
+            onCommentChange={(comment) =>
+              setReviewForm((current) => ({
+                ...current,
+                comment,
+              }))
+            }
+            onSubmit={() => void submitReview()}
+          />
 
-        <ProviderRequestPanel
-          visible={showRequestForm}
-          services={services}
-          requestForm={requestForm}
-          submitting={submittingRequest}
-          onClose={() => setShowRequestForm(false)}
-          onChange={(field, value) =>
-            setRequestForm((current) => ({
-              ...current,
-              [field]: value,
-            }))
-          }
-          onSubmit={() => void submitRequest()}
-        />
-
-        <ProviderQuickNav
-          hasStories={stories.length > 0}
-          servicesCount={services.length}
-          mediaCount={media.length}
-          reviewsCount={reviews.length}
-        />
-
-        <ProviderServicesSection
-          services={services}
-          onRequest={handleRequest}
-          onExploreCategory={handleExploreCategory}
-        />
-
-        <ProviderStoriesSection stories={stories} onOpenStory={openStory} />
-
-        <ProviderMediaSection
-          media={media}
-          commentsMap={commentsMap}
-          commentDrafts={commentDrafts}
-          likedMap={likedMap}
-          actionMediaId={actionMediaId}
-          onRefreshComments={refreshMediaComments}
-          onToggleLike={handleToggleLike}
-          onDraftChange={handleCommentDraftChange}
-          onAddComment={handleAddComment}
-        />
-
-        <ProviderReviewsSection
-          reviews={reviews}
-          reviewForm={reviewForm}
-          hasExistingReview={hasExistingReview}
-          onRatingChange={(rating) =>
-            setReviewForm((current) => ({
-              ...current,
-              rating,
-            }))
-          }
-          onCommentChange={(comment) =>
-            setReviewForm((current) => ({
-              ...current,
-              comment,
-            }))
-          }
-          onSubmit={() => void submitReview()}
-        />
-
-        <ProviderProfileDetails
-          provider={provider}
-          providerLocation={providerLocation}
-          customerGeo={customerGeo}
-        />
+          <ProviderProfileDetails
+            provider={provider}
+            providerLocation={providerLocation}
+            customerGeo={customerGeo}
+          />
+        </div>
       </div>
 
       <StoryViewer
@@ -774,7 +785,7 @@ const PublicProviderPage: React.FC = () => {
         onProviderAction={() => closeStory()}
         providerActionLabel={t('Browse provider profile')}
       />
-    </PublicMarketplaceLayout>
+    </div>
   );
 };
 

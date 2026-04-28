@@ -58,7 +58,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import './index.css';
 import './styles/app-primitives.css';
 
-type ShellLayout = 'default' | 'immersive';
+type ShellLayout = 'default' | 'immersive' | 'standalone' | 'fullbleed';
 
 interface ShellRouteConfig {
   path: string;
@@ -120,6 +120,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Customer Overview',
     subtitle: 'Track requests, favorites, messages, and next actions in one place.',
     element: <CustomerHome />,
+    layout: 'standalone',
   },
   {
     path: '/customer/explore',
@@ -128,6 +129,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Explore Providers',
     subtitle: 'Search providers by category, location, and quality signals.',
     element: <CustomerExplore />,
+    layout: 'fullbleed',
   },
   {
     path: '/customer/messages',
@@ -136,7 +138,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Messages',
     subtitle: 'Continue conversations and move directly from chat to request.',
     element: <CustomerMessages />,
-    layout: 'immersive',
+    layout: 'fullbleed',
   },
   {
     path: '/customer/orders',
@@ -145,6 +147,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Requests',
     subtitle: 'Track service requests, quotes, and provider follow-up.',
     element: <CustomerOrders />,
+    layout: 'fullbleed',
   },
   {
     path: '/customer/favorites',
@@ -153,6 +156,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Favorites',
     subtitle: 'Return quickly to providers you saved for later.',
     element: <CustomerFavorites />,
+    layout: 'fullbleed',
   },
   {
     path: '/customer/notifications',
@@ -161,6 +165,7 @@ const customerRoutes: ShellRouteConfig[] = [
     title: 'Notifications',
     subtitle: 'Messages, requests, comments, and provider activity in one feed.',
     element: <CustomerNotifications />,
+    layout: 'fullbleed',
   },
   {
     path: '/customer/reviews',
@@ -196,6 +201,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Provider Overview',
     subtitle: 'Monitor business health, moderation status, and growth signals.',
     element: <ProviderDashboard />,
+    layout: 'fullbleed',
   },
   {
     path: '/provider/profile',
@@ -204,6 +210,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Provider Profile',
     subtitle: 'Manage business identity, category, response speed, and public presence.',
     element: <ProviderProfile />,
+    layout: 'fullbleed',
   },
   {
     path: '/provider/services',
@@ -212,6 +219,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Services',
     subtitle: 'Create, publish, and position the services customers can request.',
     element: <ProviderServices />,
+    layout: 'fullbleed',
   },
   {
     path: '/provider/portfolio',
@@ -220,6 +228,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Portfolio',
     subtitle: 'Publish media, moderate comments, and strengthen proof of work.',
     element: <ProviderPortfolio />,
+    layout: 'fullbleed',
   },
   {
     path: '/provider/requests',
@@ -228,6 +237,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Requests',
     subtitle: 'Process incoming leads, quote faster, and update customer-facing status.',
     element: <ProviderRequests />,
+    layout: 'fullbleed',
   },
   {
     path: '/provider/messages',
@@ -236,7 +246,7 @@ const providerRoutes: ShellRouteConfig[] = [
     title: 'Messages',
     subtitle: 'Run the shared inbox and use AI support for faster replies.',
     element: <ProviderMessages />,
-    layout: 'immersive',
+    layout: 'fullbleed',
   },
   {
     path: '/provider/notifications',

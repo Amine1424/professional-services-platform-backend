@@ -1,16 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
-  CalendarDays,
+  AlertCircle,
+  BadgeCheck,
+  Calendar,
   CheckCircle2,
-  CircleDashed,
-  ClipboardList,
+  Clock,
+  FileText,
+  Loader2,
   MessageSquare,
-  Wallet,
+  Star,
+  StickyNote,
   XCircle,
 } from 'lucide-react';
-import RequestStatusBadge from '../components/requests/RequestStatusBadge';
+import CustomerWorkspaceTopNav from '../components/customer/CustomerWorkspaceTopNav';
 import api from '../config/api';
 import { useI18n } from '../i18n';
 import {
@@ -18,13 +22,11 @@ import {
   formatMoneyRange,
   formatRequestDate,
   getRequestStatusMeta,
-  getRequestsCountByFilter,
   matchesRequestFilter,
   RequestFilterKey,
   REQUEST_FILTERS,
 } from '../lib/service-request';
 import '../styles/app-primitives.css';
-import '../styles/service-request.css';
 
 interface CustomerOrderItem {
   id: string;
@@ -46,50 +48,168 @@ interface CustomerOrderItem {
     companyName: string;
     avatarUrl?: string | null;
     isVerified: boolean;
+    averageRating?: string | number | null;
+    reviewsCount?: number | null;
+    responseTimeMinutes?: number | null;
+    primaryCategoryName?: string | null;
   };
   service?: {
     id: string;
     name: string;
+    categoryName?: string | null;
+    price?: string | null;
+    currencyCode?: string | null;
+  } | null;
+  quote?: {
+    amount: string | number;
+    currency: string;
+    updatedAt: string;
   } | null;
 }
 
-const REQUEST_FLOW = [
-  { key: 'new', label: 'Created' },
-  { key: 'reviewed', label: 'Reviewed' },
-  { key: 'quoted', label: 'Quoted' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'completed', label: 'Completed' },
-];
+interface ConversationMessageItem {
+  id: string;
+  body: string;
+  createdAt: string;
+  senderName?: string | null;
+  senderRole?: string | null;
+}
 
-const getFlowState = (currentStatus?: string | null, stepKey?: string) => {
-  if (!currentStatus || !stepKey) return 'upcoming';
+interface TimelineEvent {
+  id: string;
+  description: string;
+  timestamp: string;
+  actor?: string | null;
+  accent?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+}
 
-  if (currentStatus === 'cancelled' || currentStatus === 'rejected') {
-    const currentIndex = REQUEST_FLOW.findIndex((item) => item.key === 'quoted');
-    const stepIndex = REQUEST_FLOW.findIndex((item) => item.key === stepKey);
+interface DecisionPrompt {
+  status: 'rejected' | 'cancelled';
+  title: string;
+  description: string;
+  confirmLabel: string;
+}
 
-    if (stepIndex !== -1 && stepIndex <= currentIndex) {
-      return 'done';
-    }
-
-    return 'upcoming';
+const STATUS_VISUALS: Record<
+  string,
+  {
+    label: string;
+    badgeClassName: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    iconClassName: string;
   }
-
-  const currentIndex = REQUEST_FLOW.findIndex((item) => item.key === currentStatus);
-  const stepIndex = REQUEST_FLOW.findIndex((item) => item.key === stepKey);
-
-  if (currentIndex === -1 || stepIndex === -1) return 'upcoming';
-  if (stepIndex < currentIndex) return 'done';
-  if (stepIndex === currentIndex) return 'current';
-  return 'upcoming';
+> = {
+  new: {
+    label: 'Awaiting Quote',
+    badgeClassName: 'bg-amber-50 text-amber-700 border border-amber-200',
+    icon: Clock,
+    iconClassName: 'text-amber-600',
+  },
+  reviewed: {
+    label: 'Under Review',
+    badgeClassName: 'bg-amber-50 text-amber-700 border border-amber-200',
+    icon: Clock,
+    iconClassName: 'text-amber-600',
+  },
+  quoted: {
+    label: 'Quote Ready',
+    badgeClassName: 'bg-blue-50 text-blue-700 border border-blue-200',
+    icon: FileText,
+    iconClassName: 'text-blue-600',
+  },
+  accepted: {
+    label: 'Accepted',
+    badgeClassName: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    icon: CheckCircle2,
+    iconClassName: 'text-emerald-600',
+  },
+  in_progress: {
+    label: 'In Progress',
+    badgeClassName: 'bg-blue-50 text-blue-700 border border-blue-200',
+    icon: Loader2,
+    iconClassName: 'text-blue-600',
+  },
+  completed: {
+    label: 'Completed',
+    badgeClassName: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    icon: CheckCircle2,
+    iconClassName: 'text-emerald-600',
+  },
+  rejected: {
+    label: 'Rejected',
+    badgeClassName: 'bg-rose-50 text-rose-700 border border-rose-200',
+    icon: XCircle,
+    iconClassName: 'text-rose-600',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    badgeClassName: 'bg-rose-50 text-rose-700 border border-rose-200',
+    icon: XCircle,
+    iconClassName: 'text-rose-600',
+  },
 };
 
-const fallbackAvatar =
-  'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80';
+const getStatusVisual = (status?: string | null) =>
+  STATUS_VISUALS[status || ''] || {
+    label: status || 'Open',
+    badgeClassName: 'bg-slate-100 text-slate-700 border border-slate-200',
+    icon: FileText,
+    iconClassName: 'text-slate-500',
+  };
+
+const getInitials = (value: string) =>
+  value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+
+const formatCompactDate = (value?: string | null, locale = 'en-GB') => {
+  if (!value) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+};
+
+const formatCurrencyValue = (amount?: string | number | null, currencyCode = 'DZD') =>
+  formatMoney(amount, currencyCode);
+
+const formatResponseTime = (minutes?: number | null) => {
+  if (!minutes || minutes <= 0) {
+    return 'Response time not shared';
+  }
+
+  if (minutes < 60) {
+    return `< ${minutes + 1} min`;
+  }
+
+  if (minutes < 120) {
+    return '< 2 hours';
+  }
+
+  return `< ${Math.ceil(minutes / 60)} hours`;
+};
+
+const getTimelineAccent = (message: ConversationMessageItem): TimelineEvent['accent'] => {
+  const body = String(message.body || '').toLowerCase();
+
+  if (body.includes('cancel')) return 'danger';
+  if (body.includes('reject')) return 'danger';
+  if (body.includes('accept')) return 'success';
+  if (body.includes('completed')) return 'success';
+  if (body.includes('quote')) return 'info';
+  return message.senderRole === 'customer' ? 'neutral' : 'warning';
+};
 
 const CustomerOrders: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestIdParam = searchParams.get('requestId');
   const filterParam = searchParams.get('tab');
@@ -99,33 +219,187 @@ const CustomerOrders: React.FC = () => {
 
   const [items, setItems] = useState<CustomerOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RequestFilterKey>(initialFilter);
   const [selectedId, setSelectedId] = useState<string | null>(requestIdParam);
   const [decisionNote, setDecisionNote] = useState('');
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [decisionPrompt, setDecisionPrompt] = useState<DecisionPrompt | null>(null);
 
-  const navigate = useNavigate();
+  const timelineCacheRef = useRef<Record<string, TimelineEvent[]>>({});
+  const timelineRequestRef = useRef(0);
 
-  const load = useCallback(async (preferredId?: string | null) => {
-    try {
-      setLoading(true);
-      const response = await api.get('/orders/customer');
-      const data = Array.isArray(response.data?.data) ? response.data.data : [];
-      setItems(data);
-      setSelectedId((current) => {
-        const requested = preferredId || current;
-        if (requested && data.some((item: CustomerOrderItem) => item.id === requested)) {
-          return requested;
+  const buildFallbackTimeline = useCallback(
+    (item: CustomerOrderItem): TimelineEvent[] => {
+      const fallbackEvents: TimelineEvent[] = [
+        {
+          id: `${item.id}-created`,
+          description: item.subject
+            ? `${t('Request submitted')}: ${item.subject}`
+            : t('Request submitted'),
+          timestamp: item.createdAt,
+          actor: t('You'),
+          accent: 'neutral',
+        },
+      ];
+
+      if (item.providerResponse) {
+        fallbackEvents.push({
+          id: `${item.id}-provider-response`,
+          description: item.providerResponse,
+          timestamp: item.updatedAt,
+          actor: item.provider.companyName,
+          accent: 'warning',
+        });
+      }
+
+      if (item.quotedPrice) {
+        fallbackEvents.push({
+          id: `${item.id}-quote`,
+          description: `${t('Quote Ready')}: ${formatCurrencyValue(
+            item.quotedPrice,
+            item.currencyCode
+          )}`,
+          timestamp: item.updatedAt,
+          actor: item.provider.companyName,
+          accent: 'info',
+        });
+      }
+
+      if (item.updatedAt !== item.createdAt) {
+        fallbackEvents.push({
+          id: `${item.id}-status`,
+          description: t(getRequestStatusMeta(item.status).nextAction),
+          timestamp: item.updatedAt,
+          actor: item.provider.companyName,
+          accent: item.status === 'cancelled' || item.status === 'rejected' ? 'danger' : 'success',
+        });
+      }
+
+      return fallbackEvents.sort(
+        (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
+      );
+    },
+    [t]
+  );
+
+  const buildTimelineFromMessages = useCallback(
+    (item: CustomerOrderItem, messages: ConversationMessageItem[]) => {
+      const mapped = messages.map<TimelineEvent>((message) => ({
+        id: message.id,
+        description: message.body,
+        timestamp: message.createdAt,
+        actor:
+          message.senderRole === 'customer'
+            ? t('You')
+            : message.senderName || item.provider.companyName,
+        accent: getTimelineAccent(message),
+      }));
+
+      const hasCreatedEvent = mapped.some((event) =>
+        event.description.toLowerCase().includes('new service request created')
+      );
+
+      if (!hasCreatedEvent) {
+        mapped.push({
+          id: `${item.id}-created`,
+          description: item.subject
+            ? `${t('Request submitted')}: ${item.subject}`
+            : t('Request submitted'),
+          timestamp: item.createdAt,
+          actor: t('You'),
+          accent: 'neutral',
+        });
+      }
+
+      return mapped.sort(
+        (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
+      );
+    },
+    [t]
+  );
+
+  const loadTimeline = useCallback(
+    async (item: CustomerOrderItem, options?: { force?: boolean }) => {
+      if (!item.conversationId) {
+        setTimelineEvents(buildFallbackTimeline(item));
+        setTimelineLoading(false);
+        return;
+      }
+
+      const cached = timelineCacheRef.current[item.conversationId];
+      if (cached && !options?.force) {
+        setTimelineEvents(cached);
+        setTimelineLoading(false);
+        return;
+      }
+
+      const requestToken = ++timelineRequestRef.current;
+      setTimelineLoading(true);
+
+      try {
+        const response = await api.get(`/messages/conversations/${item.conversationId}/messages`);
+        const messages: ConversationMessageItem[] = Array.isArray(response.data?.data?.messages)
+          ? response.data.data.messages
+          : [];
+        const nextEvents = buildTimelineFromMessages(item, messages);
+
+        if (requestToken !== timelineRequestRef.current) {
+          return;
         }
-        return data[0]?.id || null;
-      });
-    } catch (error) {
-      console.error(error);
-      toast.error(t('Failed to load your requests.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+
+        timelineCacheRef.current[item.conversationId] = nextEvents;
+        setTimelineEvents(nextEvents);
+      } catch (error) {
+        console.error('Failed to load request timeline', error);
+
+        if (requestToken !== timelineRequestRef.current) {
+          return;
+        }
+
+        setTimelineEvents(buildFallbackTimeline(item));
+      } finally {
+        if (requestToken === timelineRequestRef.current) {
+          setTimelineLoading(false);
+        }
+      }
+    },
+    [buildFallbackTimeline, buildTimelineFromMessages]
+  );
+
+  const load = useCallback(
+    async (preferredId?: string | null, options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+
+      try {
+        if (!silent) {
+          setLoading(true);
+        }
+
+        const response = await api.get('/orders/customer');
+        const data = Array.isArray(response.data?.data) ? response.data.data : [];
+        setItems(data);
+        setSelectedId((current) => {
+          const requested = preferredId || current;
+          if (requested && data.some((item: CustomerOrderItem) => item.id === requested)) {
+            return requested;
+          }
+
+          return data[0]?.id || null;
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error(t('Failed to load your requests.'));
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     void load(requestIdParam);
@@ -145,11 +419,14 @@ const CustomerOrders: React.FC = () => {
   }, [filterParam]);
 
   useEffect(() => {
-    if (!selectedId) return;
-
     const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('requestId', selectedId);
     nextParams.set('tab', filter);
+
+    if (selectedId) {
+      nextParams.set('requestId', selectedId);
+    } else {
+      nextParams.delete('requestId');
+    }
 
     if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams, { replace: true });
@@ -172,30 +449,71 @@ const CustomerOrders: React.FC = () => {
     () => items.find((item) => item.id === selectedId) || null,
     [items, selectedId]
   );
-
-  const selectedStatusMeta = getRequestStatusMeta(selected?.status);
+  const activeRequestsCount = useMemo(
+    () =>
+      items.reduce((total, item) => {
+        const meta = getRequestStatusMeta(item.status);
+        const isOpen =
+          item.status === 'new' || item.status === 'quoted' || meta.group === 'active';
+        return total + (isOpen ? 1 : 0);
+      }, 0),
+    [items]
+  );
 
   useEffect(() => {
     setDecisionNote(selected?.customerNote || '');
   }, [selected]);
 
-  const updateCustomerDecision = async (
-    status: 'accepted' | 'rejected' | 'cancelled'
-  ) => {
+  useEffect(() => {
+    if (!selected) {
+      setTimelineEvents([]);
+      setTimelineLoading(false);
+      return;
+    }
+
+    void loadTimeline(selected);
+  }, [loadTimeline, selected]);
+
+  const noteDirty = decisionNote !== (selected?.customerNote || '');
+  const canAcceptQuote = selected?.status === 'quoted';
+  const canRejectQuote = selected?.status === 'quoted';
+  const canCancelRequest = Boolean(
+    selected && ['new', 'reviewed', 'quoted'].includes(selected.status)
+  );
+
+  const persistCustomerUpdate = async (payload: {
+    status?: 'accepted' | 'rejected' | 'cancelled';
+    customerNote?: string | null;
+    successMessage: string;
+  }) => {
     if (!selected) return;
 
+    const isDecisionAction = Boolean(payload.status);
+
     try {
-      setActionLoadingId(selected.id);
+      if (isDecisionAction) {
+        setActionLoadingId(selected.id);
+      } else {
+        setSavingNote(true);
+      }
+
       await api.patch(`/orders/${selected.id}/customer`, {
-        status,
-        customerNote: decisionNote.trim() || null,
+        ...(payload.status ? { status: payload.status } : {}),
+        ...(payload.customerNote !== undefined ? { customerNote: payload.customerNote } : {}),
       });
-      toast.success(t('Request updated.'));
-      await load(selected.id);
+
+      if (selected.conversationId) {
+        delete timelineCacheRef.current[selected.conversationId];
+      }
+
+      toast.success(t(payload.successMessage));
+      await load(selected.id, { silent: true });
     } catch (error: any) {
       toast.error(error.response?.data?.message || t('Failed to update the request.'));
     } finally {
       setActionLoadingId(null);
+      setSavingNote(false);
+      setDecisionPrompt(null);
     }
   };
 
@@ -209,166 +527,379 @@ const CustomerOrders: React.FC = () => {
     navigate(`/customer/messages?providerId=${item.provider.id}${serviceIdParam}`);
   };
 
-  const summaryCards = [
-    {
-      label: 'All requests',
-      value: items.length,
-      caption: 'Every service request and quote connected to your account.',
-      icon: ClipboardList,
-    },
-    {
-      label: 'Quotes received',
-      value: getRequestsCountByFilter(
-        items.map((item) => item.status),
-        'quoted'
-      ),
-      caption: 'Requests currently waiting for your approval or rejection.',
-      icon: Wallet,
-    },
-    {
-      label: 'Active requests',
-      value: getRequestsCountByFilter(
-        items.map((item) => item.status),
-        'active'
-      ),
-      caption: 'Requests currently open or already moving into execution.',
-      icon: CheckCircle2,
-    },
-    {
-      label: 'Closed requests',
-      value: getRequestsCountByFilter(
-        items.map((item) => item.status),
-        'closed'
-      ),
-      caption: 'Completed, cancelled, or rejected requests.',
-      icon: XCircle,
-    },
-  ];
+  const selectedStatusVisual = getStatusVisual(selected?.status);
+  const SelectedStatusIcon = selectedStatusVisual.icon;
+  const selectedCategory =
+    selected?.service?.categoryName || selected?.provider.primaryCategoryName || t('No category');
+  const selectedQuoteAmount = selected?.quote?.amount || selected?.quotedPrice;
+  const providerRating =
+    selected?.provider.averageRating !== undefined && selected?.provider.averageRating !== null
+      ? Number(selected.provider.averageRating)
+      : null;
 
-  return (
-    <div className="psp-page-stack">
-      <section className="psp-surface">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              {t('Request workspace')}
+  const renderStateCard = () => {
+    if (!selected) return null;
+
+    if (selectedQuoteAmount) {
+      return (
+        <section className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <span className="text-sm font-semibold text-slate-500">{t('Quote')}</span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+              <Calendar size={13} />
+              {selected?.preferredDate
+                ? `${t('Preferred date')} ${formatCompactDate(selected.preferredDate, locale)}`
+                : `${t('Updated')} ${formatCompactDate(
+                    selected?.quote?.updatedAt || selected?.updatedAt,
+                    locale
+                  )}`}
+            </span>
+          </div>
+
+          <div className="space-y-5 px-5 py-5">
+            <div className="flex items-baseline gap-3">
+              <span className="text-[34px] font-semibold tracking-tight text-slate-950">
+                {formatCurrencyValue(selectedQuoteAmount, selected.currencyCode)}
+              </span>
             </div>
-            <h2 className="mt-2 text-[30px] font-black tracking-tight text-slate-900">
-              {t('Requests, quotes, and next decisions')}
-            </h2>
-            <div className="mt-3 max-w-[760px] text-[15px] leading-8 text-slate-600">
-              {t(
-                'Follow every request from first contact to quote, approval, execution, and closure without leaving the customer workspace.'
-              )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {t('Expected budget')}
+                </div>
+                <div className="mt-2 text-sm font-medium text-slate-900">
+                  {formatMoneyRange(selected.budgetMin, selected.budgetMax, selected.currencyCode)}
+                </div>
+              </div>
+
+              <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {t('Service')}
+                </div>
+                <div className="mt-2 text-sm font-medium text-slate-900">
+                  {selected.service?.name || selected.subject || t('Service request')}
+                </div>
+              </div>
+
+              {selected.service?.price ? (
+                <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {t('Service price')}
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-slate-900">
+                    {formatCurrencyValue(
+                      selected.service.price,
+                      selected.service.currencyCode || selected.currencyCode
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {selected.preferredDate ? (
+                <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {t('Preferred date')}
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-slate-900">
+                    {formatRequestDate(selected.preferredDate)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {selected.providerResponse ? (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {t('Provider response')}
+                </p>
+                <p className="rounded-[16px] bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
+                  {selected.providerResponse}
+                </p>
+              </div>
+            ) : null}
+
+            {canAcceptQuote ? (
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void persistCustomerUpdate({
+                      status: 'accepted',
+                      customerNote: decisionNote.trim() || null,
+                      successMessage: 'Request updated.',
+                    })
+                  }
+                  disabled={actionLoadingId === selected.id}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <CheckCircle2 size={16} />
+                  {t('Accept quote')}
+                </button>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {canRejectQuote ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDecisionPrompt({
+                          status: 'rejected',
+                          title: t('Reject Quote'),
+                          description: t(
+                            'Are you sure you want to reject this quote? You can still continue the conversation with the provider.'
+                          ),
+                          confirmLabel: t('Reject quote'),
+                        })
+                      }
+                      disabled={actionLoadingId === selected.id}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {t('Reject quote')}
+                    </button>
+                  ) : null}
+
+                  {canCancelRequest ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDecisionPrompt({
+                          status: 'cancelled',
+                          title: t('Cancel Request'),
+                          description: t(
+                            'Are you sure you want to cancel this request? This action cannot be undone.'
+                          ),
+                          confirmLabel: t('Cancel request'),
+                        })
+                      }
+                      disabled={actionLoadingId === selected.id}
+                      className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {t('Cancel request')}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      );
+    }
+
+    if (selected.status === 'new' || selected.status === 'reviewed') {
+      return (
+        <section className="rounded-[20px] border border-amber-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50">
+              <Clock size={18} className="text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-slate-950">{t('Awaiting Quote')}</h3>
+              <p className="mt-1 text-sm leading-7 text-slate-600">
+                {selected.providerResponse
+                  ? selected.providerResponse
+                  : t(
+                      'The provider is reviewing your request. You will see the next commercial update here.'
+                    )}
+              </p>
             </div>
           </div>
 
-          <div className="grid min-w-[280px] gap-3 sm:grid-cols-2">
-            <div className="rounded-[22px] bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                {t('Waiting for you')}
-              </div>
-              <div className="mt-2 text-[24px] font-black text-slate-900">
-                {getRequestsCountByFilter(
-                  items.map((item) => item.status),
-                  'quoted'
-                )}
-              </div>
+          {canCancelRequest ? (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setDecisionPrompt({
+                    status: 'cancelled',
+                    title: t('Cancel Request'),
+                    description: t(
+                      'Are you sure you want to cancel this request? This action cannot be undone.'
+                    ),
+                    confirmLabel: t('Cancel request'),
+                  })
+                }
+                disabled={actionLoadingId === selected.id}
+                className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {t('Cancel request')}
+              </button>
             </div>
-            <div className="rounded-[22px] bg-slate-50 px-4 py-4">
-              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                {t('Linked conversations')}
-              </div>
-              <div className="mt-2 text-[24px] font-black text-slate-900">
-                {items.filter((item) => item.conversationId).length}
-              </div>
+          ) : null}
+        </section>
+      );
+    }
+
+    if (selected.status === 'accepted' || selected.status === 'in_progress') {
+      return (
+        <section className="rounded-[20px] border border-blue-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50">
+              {selected.status === 'in_progress' ? (
+                <Loader2 size={18} className="animate-spin text-blue-600" />
+              ) : (
+                <CheckCircle2 size={18} className="text-emerald-600" />
+              )}
             </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-slate-950">
+                {t(selected.status === 'in_progress' ? 'Work in Progress' : 'Quote accepted')}
+              </h3>
+              <p className="mt-1 text-sm leading-7 text-slate-600">
+                {selected.providerResponse
+                  ? selected.providerResponse
+                  : t(getRequestStatusMeta(selected.status).nextAction)}
+              </p>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (selected.status === 'completed') {
+      return (
+        <section className="rounded-[20px] border border-emerald-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-slate-950">{t('Request Completed')}</h3>
+              <p className="mt-1 text-sm leading-7 text-slate-600">
+                {selected.providerResponse
+                  ? selected.providerResponse
+                  : t('This request has been completed successfully.')}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/providers/${selected.provider.id}`)}
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {t('Open provider profile')}
+              </button>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="rounded-[20px] border border-rose-200 bg-rose-50/40 px-5 py-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100">
+            <XCircle size={18} className="text-rose-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-slate-950">
+              {t(selected.status === 'rejected' ? 'Quote rejected' : 'Request Cancelled')}
+            </h3>
+            <p className="mt-1 text-sm leading-7 text-slate-600">
+              {selected.status === 'rejected'
+                ? t('This quote was rejected and is no longer active.')
+                : t('This request was cancelled and is no longer active.')}
+            </p>
           </div>
         </div>
       </section>
+    );
+  };
 
-      <section className="psp-stat-grid">
-        {summaryCards.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article key={item.label} className="psp-stat-card">
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                <Icon size={18} />
-              </div>
-              <div className="psp-stat-card__label mt-4">{t(item.label)}</div>
-              <div className="psp-stat-card__value">{item.value}</div>
-              <div className="psp-stat-card__caption">{t(item.caption)}</div>
-            </article>
-          );
-        })}
-      </section>
+  return (
+    <div className="flex min-h-screen flex-col bg-[#f8fafc]">
+      <CustomerWorkspaceTopNav currentPage="requests" activeRequestsCount={activeRequestsCount} variant="v0" />
 
-      <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="psp-surface xl:sticky xl:top-6 xl:self-start">
-          <div className="psp-surface__header">
-            <div>
-              <h2>{t('Your requests')}</h2>
-              <div className="psp-surface__sub">
-                {t('Keep one focused shortlist of all request workflows.')}
-              </div>
-            </div>
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+      <aside className="flex w-full shrink-0 flex-col border-b border-slate-200 bg-white xl:w-[380px] xl:border-b-0 xl:border-r">
+        <div className="border-b border-slate-200 px-5 py-5">
+          <h2 className="text-lg font-semibold text-slate-950">{t('My requests')}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {filteredItems.length} {t('Requests')}
+          </p>
+        </div>
 
-          <div className="psp-control-bar mb-5">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <div className="grid grid-cols-5 gap-1 rounded-xl bg-slate-100 p-1">
             {REQUEST_FILTERS.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setFilter(item.key)}
-                className={`psp-control-pill ${filter === item.key ? 'psp-control-pill--active' : ''}`}
+                className={`inline-flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold transition ${
+                  filter === item.key
+                    ? 'bg-white text-slate-950 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
                 aria-pressed={filter === item.key}
               >
                 {t(item.label)}
               </button>
             ))}
           </div>
+        </div>
 
+        <div className="flex-1 overflow-y-auto px-2 py-2">
           {loading ? (
-            <div className="psp-empty-state">{t('Loading requests...')}</div>
+            <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
+              <Loader2 size={28} className="animate-spin text-slate-300" />
+              <p className="mt-3 text-sm text-slate-500">{t('Loading requests...')}</p>
+            </div>
           ) : !filteredItems.length ? (
-            <div className="psp-empty-state">{t('No requests match this filter right now.')}</div>
+            <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
+              <FileText size={32} className="text-slate-300" />
+              <p className="mt-3 text-sm text-slate-500">{t('No requests found')}</p>
+            </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="space-y-1">
               {filteredItems.map((item) => {
-                const isActive = selectedId === item.id;
+                const visual = getStatusVisual(item.status);
+                const StatusIcon = visual.icon;
+                const isSelected = item.id === selectedId;
+                const title = item.subject || item.service?.name || t('Service request');
 
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setSelectedId(item.id)}
-                    className={`w-full rounded-[24px] border px-4 py-4 text-left transition ${
-                      isActive
-                        ? 'border-blue-200 bg-blue-50'
-                        : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'
+                    className={`w-full rounded-[16px] px-3 py-3 text-left transition ${
+                      isSelected
+                        ? 'bg-slate-100 ring-1 ring-slate-200'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-black text-slate-900">
-                          {item.subject || item.service?.name || t('Service request')}
-                        </div>
-                        <div className="mt-1 truncate text-xs text-slate-500">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`truncate text-sm font-medium ${
+                            isSelected ? 'text-slate-950' : 'text-slate-900/90'
+                          }`}
+                        >
+                          {title}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">
                           {item.provider.companyName}
-                        </div>
+                        </p>
                       </div>
-                      <RequestStatusBadge status={item.status} />
+
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${visual.badgeClassName}`}
+                      >
+                        <StatusIcon
+                          size={11}
+                          className={item.status === 'in_progress' ? 'animate-spin' : undefined}
+                        />
+                        <span>{t(visual.label)}</span>
+                      </span>
                     </div>
 
-                    <div className="mt-3 text-sm leading-6 text-slate-600">
-                      {item.description}
-                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className="text-xs text-slate-500">
+                        {formatCompactDate(item.updatedAt, locale)}
+                      </span>
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
-                      <span>{formatRequestDate(item.updatedAt)}</span>
-                      <span>
+                      <span className="text-xs font-medium text-slate-900">
                         {item.quotedPrice
-                          ? formatMoney(item.quotedPrice, item.currencyCode)
+                          ? formatCurrencyValue(item.quotedPrice, item.currencyCode)
                           : formatMoneyRange(item.budgetMin, item.budgetMax, item.currencyCode)}
                       </span>
                     </div>
@@ -377,278 +908,266 @@ const CustomerOrders: React.FC = () => {
               })}
             </div>
           )}
-        </aside>
+        </div>
+      </aside>
 
-        <section className="psp-page-stack">
-          {!selected ? (
-            <div className="psp-empty-state">
-              {t('Select a request from the list to review the full detail and next actions.')}
+      <main className="flex-1 overflow-y-auto">
+        {!selected ? (
+          <div className="mx-auto flex min-h-[100dvh] max-w-3xl items-center justify-center px-6 py-10">
+            <div className="rounded-[24px] border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
+              <FileText size={32} className="mx-auto text-slate-300" />
+              <p className="mt-4 text-sm text-slate-500">
+                {t('Select a request from the list to review the full detail and next actions.')}
+              </p>
             </div>
-          ) : (
-            <>
-              <article className="psp-surface">
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="flex items-start gap-4">
-                    <img
-                      src={selected.provider.avatarUrl || fallbackAvatar}
-                      alt={selected.provider.companyName}
-                      className="h-16 w-16 rounded-[22px] object-cover"
-                    />
+          </div>
+        ) : (
+          <div className="mx-auto max-w-3xl px-6 py-6">
+            <div className="space-y-6">
+              <section className="space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <h1 className="text-[24px] font-semibold tracking-tight text-slate-950">
+                      {selected.subject || selected.service?.name || t('Service request')}
+                    </h1>
+                    <p className="text-sm text-slate-500">{selectedCategory}</p>
+                  </div>
 
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-[28px] font-black tracking-tight text-slate-900">
-                          {selected.subject || selected.service?.name || t('Service request')}
-                        </h2>
-                        <RequestStatusBadge status={selected.status} />
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${selectedStatusVisual.badgeClassName}`}
+                  >
+                    <SelectedStatusIcon
+                      size={16}
+                      className={
+                        selected.status === 'in_progress' ? 'animate-spin' : selectedStatusVisual.iconClassName
+                      }
+                    />
+                    {t(selectedStatusVisual.label)}
+                  </span>
+                </div>
+
+                <section className="rounded-[20px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                        {selected.provider.avatarUrl ? (
+                          <img
+                            src={selected.provider.avatarUrl}
+                            alt={selected.provider.companyName}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          getInitials(selected.provider.companyName || 'PS')
+                        )}
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                        <span>{selected.provider.companyName}</span>
-                        <span>•</span>
-                        <span>{formatRequestDate(selected.updatedAt)}</span>
-                        {selected.provider.isVerified ? (
-                          <>
-                            <span>•</span>
-                            <span className="inline-flex items-center gap-1 text-emerald-700">
-                              <CheckCircle2 size={14} />
-                              {t('Verified')}
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-slate-950">
+                            {selected.provider.companyName}
+                          </span>
+                          {selected.provider.isVerified ? (
+                            <BadgeCheck size={16} className="text-blue-600" />
+                          ) : null}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          {providerRating ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Star size={12} className="fill-amber-400 text-amber-400" />
+                              {providerRating.toFixed(1)}
                             </span>
-                          </>
-                        ) : null}
+                          ) : null}
+
+                          {selected.provider.reviewsCount ? (
+                            <>
+                              <span>&bull;</span>
+                              <span>
+                                {selected.provider.reviewsCount} {t('reviews')}
+                              </span>
+                            </>
+                          ) : null}
+
+                          {selected.provider.responseTimeMinutes ? (
+                            <>
+                              <span>&bull;</span>
+                              <span>{formatResponseTime(selected.provider.responseTimeMinutes)}</span>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => goToConversation(selected)}
-                    className="psp-button psp-button--secondary"
-                  >
-                    <MessageSquare size={16} />
-                    {t('Open conversation')}
-                  </button>
-                </div>
-              </article>
-
-              <section className="grid gap-6 lg:grid-cols-2 2xl:grid-cols-4">
-                <article className="psp-stat-card">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                    <Wallet size={18} />
+                    <button
+                      type="button"
+                      onClick={() => goToConversation(selected)}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <MessageSquare size={14} />
+                      {t('Open conversation')}
+                    </button>
                   </div>
-                  <div className="psp-stat-card__label mt-4">{t('Expected budget')}</div>
-                  <div className="text-[20px] font-black tracking-tight text-slate-900">
-                    {formatMoneyRange(
-                      selected.budgetMin,
-                      selected.budgetMax,
-                      selected.currencyCode
-                    )}
-                  </div>
-                </article>
-
-                <article className="psp-stat-card">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                    <ClipboardList size={18} />
-                  </div>
-                  <div className="psp-stat-card__label mt-4">{t('Current quote')}</div>
-                  <div className="text-[20px] font-black tracking-tight text-slate-900">
-                    {selected.quotedPrice
-                      ? formatMoney(selected.quotedPrice, selected.currencyCode)
-                      : t('No quote yet')}
-                  </div>
-                </article>
-
-                <article className="psp-stat-card">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                    <CalendarDays size={18} />
-                  </div>
-                  <div className="psp-stat-card__label mt-4">{t('Preferred date')}</div>
-                  <div className="text-[20px] font-black tracking-tight text-slate-900">
-                    {formatRequestDate(selected.preferredDate)}
-                  </div>
-                </article>
-
-                <article className="psp-stat-card">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                    <CheckCircle2 size={18} />
-                  </div>
-                  <div className="psp-stat-card__label mt-4">{t('Next step')}</div>
-                  <div className="text-[16px] font-black tracking-tight text-slate-900">
-                    {t(selectedStatusMeta.label)}
-                  </div>
-                </article>
+                </section>
               </section>
 
-              <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-                <article className="psp-surface">
-                  <div className="psp-surface__header">
-                    <div>
-                      <h2>{t('Request summary')}</h2>
-                      <div className="psp-surface__sub">
-                        {t('Original request details, provider response, and what happens next.')}
-                      </div>
-                    </div>
-                  </div>
+              {renderStateCard()}
 
-                  <div className="grid gap-5">
-                    <div className="rounded-[24px] bg-slate-50 p-5">
-                      <div className="text-sm font-black text-slate-900">{t('Description')}</div>
-                      <div className="mt-3 text-[15px] leading-8 text-slate-700">
-                        {selected.description}
-                      </div>
-                    </div>
-
-                    {selected.providerResponse ? (
-                      <div className="rounded-[24px] border border-blue-100 bg-blue-50/70 p-5">
-                        <div className="text-sm font-black text-slate-900">{t('Provider response')}</div>
-                        <div className="mt-3 text-[15px] leading-8 text-slate-700">
-                          {selected.providerResponse}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                      <div className="text-sm font-black text-slate-900">{t('What should happen now')}</div>
-                      <div className="mt-3 text-[15px] leading-8 text-slate-700">
-                        {t(selectedStatusMeta.nextAction)}
-                      </div>
-                    </div>
-                  </div>
-                </article>
-
-                <article className="psp-surface">
-                  <div className="psp-surface__header">
-                    <div>
-                      <h2>{t('Lifecycle')}</h2>
-                      <div className="psp-surface__sub">
-                        {t('A clean visual view of the current stage.')}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3">
-                    {REQUEST_FLOW.map((step) => {
-                      const state = getFlowState(selected.status, step.key);
-
-                      return (
-                        <div
-                          key={step.key}
-                          className={`flex items-center gap-4 rounded-[22px] px-4 py-4 ${
-                            state === 'done'
-                              ? 'bg-emerald-50'
-                              : state === 'current'
-                                ? 'bg-blue-50'
-                                : 'bg-slate-50'
-                          }`}
-                        >
-                          <div
-                            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${
-                              state === 'done'
-                                ? 'bg-emerald-600 text-white'
-                                : state === 'current'
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-slate-200 text-slate-500'
-                            }`}
-                          >
-                            {state === 'done' ? (
-                              <CheckCircle2 size={18} />
-                            ) : state === 'current' ? (
-                              <CircleDashed size={18} />
-                            ) : (
-                              <CircleDashed size={18} />
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="text-sm font-black text-slate-900">{t(step.label)}</div>
-                            <div className="mt-1 text-sm text-slate-600">
-                              {t(getRequestStatusMeta(step.key).nextAction)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {selected.status === 'rejected' ? (
-                      <div className="rounded-[22px] bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
-                        {t('This request was rejected.')}
-                      </div>
-                    ) : null}
-
-                    {selected.status === 'cancelled' ? (
-                      <div className="rounded-[22px] bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
-                        {t('This request was cancelled.')}
-                      </div>
-                    ) : null}
-                  </div>
-                </article>
-              </div>
-
-              <article className="psp-surface">
-                <div className="psp-surface__header">
-                  <div>
-                      <h2>{t('Your notes and decisions')}</h2>
-                      <div className="psp-surface__sub">
-                        {t('Keep a note, then take the right customer-side action.')}
-                      </div>
-                    </div>
-                  </div>
+              <section className="rounded-[20px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <StickyNote size={16} className="text-slate-400" />
+                  <span className="text-sm font-medium text-slate-950">{t('Your Note')}</span>
+                </div>
 
                 <textarea
                   value={decisionNote}
                   onChange={(event) => setDecisionNote(event.target.value)}
-                  placeholder={t('Add a note before accepting, rejecting, or cancelling this request...')}
-                  className="psp-textarea"
+                  placeholder={t('Add a personal note about this request...')}
+                  className="min-h-[88px] w-full resize-none rounded-[16px] border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700 outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
                 />
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => goToConversation(selected)}
-                    className="psp-button psp-button--secondary"
-                  >
-                    <MessageSquare size={16} />
-                    {t('Open conversation')}
-                  </button>
-
-                  {selected.status === 'quoted' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void updateCustomerDecision('accepted')}
-                        disabled={actionLoadingId === selected.id}
-                        className="psp-button psp-button--primary"
-                      >
-                        {t('Accept quote')}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => void updateCustomerDecision('rejected')}
-                        disabled={actionLoadingId === selected.id}
-                        className="psp-button psp-button--danger"
-                      >
-                        {t('Reject quote')}
-                      </button>
-                    </>
-                  ) : null}
-
-                  {['new', 'reviewed', 'quoted'].includes(selected.status) ? (
+                {noteDirty ? (
+                  <div className="mt-3 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => void updateCustomerDecision('cancelled')}
-                      disabled={actionLoadingId === selected.id}
-                      className="psp-button psp-button--danger"
+                      onClick={() =>
+                        void persistCustomerUpdate({
+                          customerNote: decisionNote.trim() || null,
+                          successMessage: 'Note saved.',
+                        })
+                      }
+                      disabled={savingNote}
+                      className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {t('Cancel request')}
+                      {t(savingNote ? 'Saving...' : 'Save Note')}
                     </button>
-                  ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-[20px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <h3 className="text-sm font-medium text-slate-950">{t('Request Timeline')}</h3>
+
+                {timelineLoading ? (
+                  <div className="flex items-center gap-3 py-8 text-sm text-slate-500">
+                    <Loader2 size={16} className="animate-spin" />
+                    {t('Loading timeline...')}
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {timelineEvents.map((event, index) => (
+                      <div key={event.id} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`mt-1.5 h-2 w-2 rounded-full ${
+                              event.accent === 'success'
+                                ? 'bg-emerald-500'
+                                : event.accent === 'info'
+                                  ? 'bg-blue-500'
+                                  : event.accent === 'danger'
+                                    ? 'bg-rose-500'
+                                    : event.accent === 'warning'
+                                      ? 'bg-amber-500'
+                                      : 'bg-slate-300'
+                            }`}
+                          />
+                          {index < timelineEvents.length - 1 ? (
+                            <div className="mt-1 w-px flex-1 bg-slate-200" />
+                          ) : null}
+                        </div>
+
+                        <div className="flex-1 pb-4">
+                          <p className="text-sm leading-7 text-slate-800">{event.description}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span>{formatRequestDate(event.timestamp)}</span>
+                            {event.actor ? (
+                              <>
+                                <span>&bull;</span>
+                                <span>{event.actor}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-[20px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <h3 className="text-sm font-medium text-slate-950">{t('Request Details')}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{selected.description}</p>
+
+                <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                  <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {t('Created')}
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {formatRequestDate(selected.createdAt)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {t('Updated')}
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {formatRequestDate(selected.updatedAt)}
+                    </div>
+                  </div>
                 </div>
-              </article>
-            </>
-          )}
-        </section>
-      </section>
+              </section>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {decisionPrompt && selected ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-md rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-rose-50">
+                <AlertCircle size={20} className="text-rose-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-semibold text-slate-950">{decisionPrompt.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-600">
+                  {decisionPrompt.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDecisionPrompt(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                {t('Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void persistCustomerUpdate({
+                    status: decisionPrompt.status,
+                    customerNote: decisionNote.trim() || null,
+                    successMessage: 'Request updated.',
+                  })
+                }
+                disabled={actionLoadingId === selected.id}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {actionLoadingId === selected.id ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                {decisionPrompt.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      </div>
     </div>
   );
 };

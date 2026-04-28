@@ -1,7 +1,6 @@
-import React, { useMemo } from 'react';
-import { Globe, Lock, PlayCircle, Sparkles } from 'lucide-react';
+import React from 'react';
+import { ChevronRight, Heart, MessageCircle, Play } from 'lucide-react';
 import { useI18n } from '../../i18n';
-import { formatDateTimeLabel } from '../../lib/strings';
 import { ProviderStoryItem } from './types';
 
 interface ProviderStoriesSectionProps {
@@ -9,125 +8,82 @@ interface ProviderStoriesSectionProps {
   onOpenStory: (storyId: string) => void;
 }
 
+const formatTimestamp = (value: string, locale = 'en-GB') =>
+  new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+
 const ProviderStoriesSection: React.FC<ProviderStoriesSectionProps> = ({
   stories,
   onOpenStory,
 }) => {
-  const { t } = useI18n();
-
-  const stats = useMemo(() => {
-    const publicStories = stories.filter((story) => story.storyAudience === 'public').length;
-    const favoriteStories = stories.filter(
-      (story) => story.storyAudience === 'favorites_only'
-    ).length;
-
-    return {
-      publicStories,
-      favoriteStories,
-    };
-  }, [stories]);
+  const { locale, t } = useI18n();
 
   if (!stories.length) {
     return null;
   }
 
   return (
-    <section id="provider-stories" className="psp-surface">
-      <div className="psp-surface__header">
+    <section id="provider-stories" className="border-t border-slate-200 py-10">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2>{t('Story updates')}</h2>
-          <div className="psp-surface__sub">
-            {t('View recent story posts in a dedicated viewer, then reply directly into messaging.')}
-          </div>
+          <h2 className="text-xl font-semibold text-slate-950">{t('Recent Updates')}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {t('See what this provider has been working on')}
+          </p>
         </div>
-        <div className="psp-summary-strip">
-          <span className="psp-summary-chip">
-            <strong>{stories.length}</strong>
-            {t('active stories')}
-          </span>
-          <span className="psp-summary-chip">
-            <strong>{stats.publicStories}</strong>
-            {t('public')}
-          </span>
-          <span className="psp-summary-chip">
-            <strong>{stats.favoriteStories}</strong>
-            {t('favorites only')}
-          </span>
-        </div>
+
+        <button
+          type="button"
+          onClick={() => onOpenStory(stories[0].id)}
+          className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-900"
+        >
+          {t('View All')}
+          <ChevronRight size={16} />
+        </button>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2">
         {stories.map((story) => (
           <button
             key={story.id}
             type="button"
             onClick={() => onOpenStory(story.id)}
-            className="overflow-hidden rounded-[24px] border border-white/80 bg-white/95 text-left shadow-[0_18px_36px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_44px_rgba(15,23,42,0.1)]"
+            className="group w-64 shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition-colors hover:border-blue-200"
           >
-            <div className="relative h-[220px] bg-slate-100">
+            <div className="relative aspect-[3/4] overflow-hidden bg-slate-100">
+              <img
+                src={story.thumbnailUrl || story.mediaUrl}
+                alt={story.title}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+
               {story.mediaType === 'video' ? (
-                story.thumbnailUrl ? (
-                  <img
-                    src={story.thumbnailUrl}
-                    alt={story.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <video
-                    src={story.mediaUrl}
-                    muted
-                    playsInline
-                    className="h-full w-full object-cover"
-                  />
-                )
-              ) : (
-                <img
-                  src={story.mediaUrl}
-                  alt={story.title}
-                  className="h-full w-full object-cover"
-                />
-              )}
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.03),rgba(15,23,42,0.62))]" />
-              <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-fuchsia-600 px-3 py-1 text-xs font-bold text-white">
-                  {t('Story')}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
-                  {story.storyAudience === 'favorites_only' ? (
-                    <Lock size={12} />
-                  ) : (
-                    <Globe size={12} />
-                  )}
-                  {story.storyAudience === 'favorites_only' ? t('Favorites') : t('Public')}
-                </span>
-              </div>
-              {story.mediaType === 'video' ? (
-                <div className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/85 text-slate-900">
-                  <PlayCircle size={18} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+                    <Play size={18} className="ml-0.5 text-slate-900" />
+                  </div>
                 </div>
               ) : null}
+
+              <div className="absolute left-3 top-3 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-slate-700">
+                {story.createdAt ? formatTimestamp(story.createdAt, locale) : t('Live')}
+              </div>
             </div>
 
-            <div className="grid gap-3 p-5">
-              <div>
-                <div className="text-[20px] font-black tracking-tight text-slate-900">
-                  {story.title}
-                </div>
-                <div className="mt-2 text-sm text-slate-500">
-                  {story.service?.name || t('Provider story')}
-                </div>
-              </div>
-
-              {story.description ? (
-                <div className="text-sm leading-7 text-slate-600">{story.description}</div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
-                <span className="inline-flex items-center gap-2">
-                  <Sparkles size={14} />
-                  {story.storyExpiresAt
-                    ? `${t('Expires')} ${formatDateTimeLabel(story.storyExpiresAt)}`
-                    : t('Active now')}
+            <div className="p-3">
+              <p className="mb-3 line-clamp-2 text-sm text-slate-900">
+                {story.description || story.title}
+              </p>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1">
+                  <Heart size={14} />
+                  {story.likesCount}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle size={14} />
+                  {story.commentsCount}
                 </span>
               </div>
             </div>
