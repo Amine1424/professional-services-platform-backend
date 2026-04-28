@@ -1,3 +1,5 @@
 
 frontend/.env
 *.zip
+
+.tmp_v0_*/
